@@ -1,0 +1,32 @@
+<Project>
+
+  <!--
+    Propiedades comunes a TODOS los proyectos de la solucion.
+    Centralizar aqui evita repetir configuracion en cada .csproj y garantiza
+    que toda la solucion compile con el mismo TargetFramework (.NET 8),
+    exigido por el examen.
+  -->
+  <PropertyGroup>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NeutralLanguage>es-EC</NeutralLanguage>
+    <Company>SmartEvent</Company>
+    <Product>SmartEvent AI</Product>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Authors>Williams Joel Navarrete Merino</Authors>
+
+    <!-- Se tratan como error los avisos mas peligrosos para la calidad exigida:
+         CS4014 = llamada async sin await (fuga de excepciones)
+         CS1998 = metodo async sin await (falsa asincronia)
+         CS8600/8602/8603/8618 = posibles NullReferenceException -->
+    <WarningsAsErrors>CS4014;CS1998;CS8600;CS8602;CS8603;CS8618</WarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+  </PropertyGroup>
+
+</Project>

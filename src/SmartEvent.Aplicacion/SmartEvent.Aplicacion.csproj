@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    CAPA APLICACION / SERVICIOS
+    Contiene:
+      - Los CONTRATOS (interfaces) de repositorios e integraciones.
+      - Los SERVICIOS de caso de uso que orquestan reglas de negocio.
+      - Los DTO que la presentacion consume.
+    Solo depende del Dominio. NO conoce Microsoft.Data.SqlClient, MailKit ni
+    OpenAI: habla con ellos a traves de interfaces (Inversion de Dependencias),
+    que es lo que permite cumplir el requisito del examen de que la capa de
+    presentacion no toque SQL/SMTP/OpenAI directamente.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>SmartEvent.Aplicacion</RootNamespace>
+    <AssemblyName>SmartEvent.Aplicacion</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmartEvent.Dominio\SmartEvent.Dominio.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Solo abstracciones de logging y opciones: ninguna implementacion concreta. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    PROYECTO DE PRUEBAS
+    Automatiza los casos de aceptacion que pueden verificarse sin interfaz
+    grafica (CA-01 a CA-05 contra la base real, y CA-09 sin clave de OpenAI).
+    NO es una aplicacion de consola: es un proyecto de pruebas que se ejecuta
+    con `dotnet test`, por lo que no infringe la prohibicion del examen de usar
+    una consola como aplicacion principal.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>SmartEvent.Pruebas</RootNamespace>
+    <AssemblyName>SmartEvent.Pruebas</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SmartEvent.Dominio\SmartEvent.Dominio.csproj" />
+    <ProjectReference Include="..\..\src\SmartEvent.Aplicacion\SmartEvent.Aplicacion.csproj" />
+    <ProjectReference Include="..\..\src\SmartEvent.Infraestructura\SmartEvent.Infraestructura.csproj" />
+    <ProjectReference Include="..\..\src\SmartEvent.Integraciones\SmartEvent.Integraciones.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+</Project>

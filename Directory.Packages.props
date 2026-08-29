@@ -1,0 +1,54 @@
+<Project>
+
+  <!--
+    GESTION CENTRALIZADA DE PAQUETES (Central Package Management)
+    Un unico archivo define la version de cada paquete NuGet de la solucion.
+    Los .csproj declaran <PackageReference Include="..."/> SIN atributo Version.
+
+    Por que:
+      1. Evita que dos proyectos usen versiones distintas del mismo paquete,
+         que es el origen tipico del error NU1605 (degradacion de paquete).
+      2. Elimina duplicacion de configuracion (criterio "codigo mantenible"
+         de la rubrica del examen).
+      3. Actualizar una dependencia de seguridad se hace en una sola linea.
+
+    Nota de seguridad: MailKit se fija en 4.17.0 porque las versiones <= 4.8.0
+    tienen la vulnerabilidad GHSA-9j88-vvj5-vhgr. La auditoria se ejecuta con
+    el comando documentado en el README (dotnet list package, con las opciones
+    de vulnerabilidad y dependencias transitivas).
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup Label="Acceso a datos">
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.6" />
+  </ItemGroup>
+
+  <ItemGroup Label="Integraciones">
+    <PackageVersion Include="MailKit" Version="4.17.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Configuracion, DI y logging">
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="8.0.2" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="8.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="8.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="8.0.2" />
+  </ItemGroup>
+
+  <ItemGroup Label="Pruebas">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageVersion Include="xunit" Version="2.9.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    CAPA DOMINIO
+    Entidades, enumeraciones, reglas puras y objetos de valor.
+    NO tiene dependencias de infraestructura (ni SQL, ni HTTP, ni WinForms):
+    es el nucleo que puede probarse aislado. Por eso no referencia ningun
+    paquete NuGet ni ningun otro proyecto.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>SmartEvent.Dominio</RootNamespace>
+    <AssemblyName>SmartEvent.Dominio</AssemblyName>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,17 @@
+# Normalizacion de fin de linea para que el repositorio se clone igual
+# en cualquier equipo (Examen: "compila desde un clon limpio").
+* text=auto eol=crlf
+
+*.sql   text eol=crlf working-tree-encoding=UTF-8
+*.cs    text eol=crlf
+*.csproj text eol=crlf
+*.sln   text eol=crlf
+*.json  text eol=crlf
+*.md    text eol=crlf
+*.props text eol=crlf
+
+*.png   binary
+*.jpg   binary
+*.pdf   binary
+*.ico   binary
+*.docx  binary

@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    CAPA INTEGRACIONES
+    Unica capa que conoce MailKit y la Responses API de OpenAI.
+    Implementa IServicioCorreo e IServicioAnalisisIA (definidos en Aplicacion).
+    Las credenciales llegan por IOptions desde variables de entorno o User
+    Secrets: aqui NUNCA hay una clave escrita en el codigo (Examen §9 y §10).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>SmartEvent.Integraciones</RootNamespace>
+    <AssemblyName>SmartEvent.Integraciones</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmartEvent.Dominio\SmartEvent.Dominio.csproj" />
+    <ProjectReference Include="..\SmartEvent.Aplicacion\SmartEvent.Aplicacion.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MailKit" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+</Project>

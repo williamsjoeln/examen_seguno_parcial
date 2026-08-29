@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    CAPA INFRAESTRUCTURA / DATOS
+    Unica capa que conoce Microsoft.Data.SqlClient. Implementa los repositorios
+    definidos en Aplicacion invocando EXCLUSIVAMENTE procedimientos almacenados
+    con parametros tipados (prohibido concatenar SQL, Examen §8).
+    Tambien aloja el logging local seguro con redaccion de secretos.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>SmartEvent.Infraestructura</RootNamespace>
+    <AssemblyName>SmartEvent.Infraestructura</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmartEvent.Dominio\SmartEvent.Dominio.csproj" />
+    <ProjectReference Include="..\SmartEvent.Aplicacion\SmartEvent.Aplicacion.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+</Project>
