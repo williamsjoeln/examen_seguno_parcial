@@ -36,7 +36,14 @@
       identificador, que se lee peor. Se suprime la regla de forma explicita y
       documentada, no por descuido.
     -->
-    <NoWarn>$(NoWarn);CA1710</NoWarn>
+    <!--
+      CA1716 avisa de que IRegistradorSeguro.Error choca con una palabra
+      reservada de Visual Basic .NET. La regla existe para escenarios de
+      interoperabilidad entre lenguajes; esta solucion es unicamente C# y
+      ningun proyecto en VB va a implementar esa interfaz. Informacion,
+      Advertencia y Error son los nombres naturales de los niveles de registro.
+    -->
+    <NoWarn>$(NoWarn);CA1710;CA1716</NoWarn>
   </PropertyGroup>
 
 </Project>

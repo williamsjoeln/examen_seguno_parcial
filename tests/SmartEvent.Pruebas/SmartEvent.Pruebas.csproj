@@ -4,16 +4,38 @@
     PROYECTO DE PRUEBAS
     Automatiza los casos de aceptacion que pueden verificarse sin interfaz
     grafica (CA-01 a CA-05 contra la base real, y CA-09 sin clave de OpenAI).
-    NO es una aplicacion de consola: es un proyecto de pruebas que se ejecuta
-    con `dotnet test`, por lo que no infringe la prohibicion del examen de usar
-    una consola como aplicacion principal.
+
+    Sobre OutputType=Exe: xUnit v3 genera proyectos de prueba AUTOEJECUTABLES,
+    porque se apoya en Microsoft.Testing.Platform en lugar del antiguo VSTest.
+    Eso NO convierte a este proyecto en la aplicacion principal del sistema: la
+    aplicacion es SmartEvent.WinForms, y este ensamblado solo contiene metodos
+    marcados con [Fact] que se lanzan con "dotnet test". La prohibicion del
+    examen se refiere a entregar una consola COMO aplicacion principal, cosa
+    que no ocurre aqui.
   -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Exe</OutputType>
     <RootNamespace>SmartEvent.Pruebas</RootNamespace>
     <AssemblyName>SmartEvent.Pruebas</AssemblyName>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+
+    <!--
+      CA1707 prohibe los guiones bajos en nombres de miembros. En pruebas
+      unitarias la convencion establecida es justamente
+      Escenario_Accion_ResultadoEsperado, porque el nombre del metodo es lo que
+      se lee en el informe de ejecucion. Se suprime SOLO en este proyecto.
+    -->
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+
+    <!--
+      xUnit v3 se ejecuta sobre Microsoft.Testing.Platform. A partir del SDK 10
+      de .NET hay que activar explicitamente el soporte de "dotnet test" para
+      esa plataforma; sin esta propiedad, el comando falla indicando que VSTest
+      ya no esta soportado.
+    -->
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,9 +46,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit" />
-    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="xunit.v3" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />

@@ -681,6 +681,15 @@ GO
    ============================================================================= */
 GO
 
+/* Las opciones SET vigentes en el momento de CREAR un procedimiento quedan
+   GRABADAS en el, y sqlcmd las deja en OFF por defecto. Se fijan en ON aqui
+   para que los procedimientos se comporten igual creados desde sqlcmd, desde
+   SSMS o desde Azure Data Studio. */
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
+
 /* -----------------------------------------------------------------------------
    seg.sp_Usuario_Autenticar
    Responsabilidad (Examen SS5): "Consultar usuario activo y datos de
@@ -754,12 +763,19 @@ BEGIN
                aplicacion siempre ejecuta el mismo trabajo criptografico, exista
                o no el usuario, y la respuesta final es siempre la misma. Asi no
                se puede deducir por la respuesta ni por el tiempo de proceso si
-               la cuenta existe (enumeracion de usuarios). */
-            DECLARE @XmlAux  XML = N'';
-            DECLARE @Semilla VARBINARY(16) =
-                CONVERT(VARBINARY(16), HASHBYTES('SHA2_256', 'SmartEvent.Senuelo.' + @NombreUsuario));
+               la cuenta existe (enumeracion de usuarios).
 
-            SET @SaltBase64 = @XmlAux.value('xs:base64Binary(sql:variable("@Semilla"))', 'VARCHAR(64)');
+               Se toman 24 caracteres de la representacion hexadecimal del hash.
+               Los digitos hexadecimales (0-9, A-F) son un subconjunto del
+               alfabeto Base64, y 24 es multiplo de 4, de modo que el resultado
+               es una cadena Base64 sintacticamente valida que la aplicacion
+               puede decodificar sin error. No se usan metodos del tipo XML a
+               proposito: exigen QUOTED_IDENTIFIER ON, opcion que queda grabada
+               al crear el procedimiento y que sqlcmd desactiva por defecto. */
+            DECLARE @Semilla VARBINARY(32) =
+                HASHBYTES('SHA2_256', 'SmartEvent.Senuelo.' + @NombreUsuario);
+
+            SET @SaltBase64 = LEFT(CONVERT(VARCHAR(64), @Semilla, 2), 24);
         END
 
         SELECT  Algoritmo       = 'PBKDF2-SHA256',
