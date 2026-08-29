@@ -36,7 +36,7 @@ public sealed class PruebasReservas
     /// entre si por el mismo salon y horario.
     /// </summary>
     private static DateOnly FechaDePrueba(int desplazamientoDias) =>
-        DateOnly.FromDateTime(DateTime.Today).AddDays(400 + desplazamientoDias);
+        DateOnly.FromDateTime(DateTime.Today).AddDays(ContextoPruebas.DiasDesplazamientoBase + desplazamientoDias);
 
     private async Task<(int IdUsuarioCoord, int IdUsuarioAdmin, int IdCliente, int IdSalonGrande,
                         int IdSalonPequeno, int IdProyector, int IdSillas, int IdCatering,

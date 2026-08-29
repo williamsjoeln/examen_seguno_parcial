@@ -21,9 +21,18 @@ namespace SmartEvent.Pruebas;
 /// proyecto sigue compilando y ejecutandose en un equipo recien clonado que
 /// todavia no configuro nada.
 /// </summary>
-public sealed class ContextoPruebas : IDisposable
+public sealed class ContextoPruebas : IAsyncLifetime
 {
     public const string NombreVariableConexion = "ConnectionStrings__SmartEventDb";
+
+    /// <summary>
+    /// Las pruebas trabajan con fechas muy lejanas (mas de 400 dias) para no
+    /// interferir con datos reales. Antes de cada ejecucion se borran las
+    /// reservas de ese rango, de modo que la bateria sea REPETIBLE: sin esto,
+    /// la segunda ejecucion chocaria por cruce de horario con las reservas que
+    /// creo la primera.
+    /// </summary>
+    public const int DiasDesplazamientoBase = 400;
 
     public string? CadenaConexion { get; }
 
@@ -80,7 +89,42 @@ public sealed class ContextoPruebas : IDisposable
     public void OmitirSiNoHayBaseDatos() =>
         Assert.SkipWhen(MotivoOmision is not null, MotivoOmision ?? string.Empty);
 
-    public void Dispose() => _registrador.Dispose();
+    /// <summary>
+    /// Se ejecuta UNA vez antes de toda la bateria: deja limpia la franja de
+    /// fechas reservada para las pruebas.
+    ///
+    /// El borrado se hace con una sentencia directa a proposito, porque la
+    /// aplicacion no expone ninguna operacion de borrado de reservas: eliminar
+    /// datos no es un caso de uso del sistema, solo una necesidad de las
+    /// pruebas. Las claves foraneas con ON DELETE CASCADE arrastran detalle,
+    /// auditoria, analisis de IA y correos asociados.
+    /// </summary>
+    public async ValueTask InitializeAsync()
+    {
+        if (MotivoOmision is not null)
+        {
+            return;
+        }
+
+        await using var conexion = await Fabrica.AbrirAsync(CancellationToken.None);
+
+        await using var comando = new Microsoft.Data.SqlClient.SqlCommand(
+            "DELETE FROM evt.Reserva WHERE FechaEvento >= @Desde", conexion);
+
+        comando.Parameters.Add("@Desde", System.Data.SqlDbType.Date).Value =
+            DateTime.Today.AddDays(DiasDesplazamientoBase);
+
+        var borradas = await comando.ExecuteNonQueryAsync(CancellationToken.None);
+
+        Registro.Informacion(
+            $"Limpieza previa a las pruebas: {borradas} reserva(s) de prueba eliminadas.");
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _registrador.Dispose();
+        return ValueTask.CompletedTask;
+    }
 }
 
 /// <summary>
