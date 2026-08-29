@@ -27,6 +27,16 @@
     <WarningsAsErrors>CS4014;CS1998;CS8600;CS8602;CS8603;CS8618</WarningsAsErrors>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
+
+    <!--
+      CA1710 exige que los tipos derivados de Exception terminen en "Exception".
+      Toda la solucion esta escrita en espanol por coherencia con el enunciado
+      del examen, y los tipos se llaman ExcepcionNegocio y ExcepcionIntegracion.
+      Renombrarlos a "NegocioException" mezclaria dos idiomas en un mismo
+      identificador, que se lee peor. Se suprime la regla de forma explicita y
+      documentada, no por descuido.
+    -->
+    <NoWarn>$(NoWarn);CA1710</NoWarn>
   </PropertyGroup>
 
 </Project>
