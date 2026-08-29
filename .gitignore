@@ -1,0 +1,136 @@
+## ---------------------------------------------------------------
+## SmartEvent AI - .gitignore
+## Este archivo es el PRIMER commit del repositorio, antes de que
+## exista cualquier archivo de configuracion, para garantizar que
+## ningun secreto llegue al historial de Git (Examen §12 y §16).
+## ---------------------------------------------------------------
+
+## === SECRETOS: NUNCA deben entrar al repositorio ===
+appsettings.json
+appsettings.*.json
+!appsettings.example.json
+!appsettings.Development.example.json
+.env
+.env.*
+!.env.example
+secrets.json
+*.secrets.json
+*.pfx
+*.snk
+*.key
+*.pem
+local.settings.json
+
+## === Salidas de compilacion ===
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+build/
+bld/
+[Ll]og/
+[Ll]ogs/
+artifacts/
+publish/
+*.dll
+*.exe
+*.pdb
+*.cache
+
+## === Visual Studio / Rider / VS Code ===
+.vs/
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.VC.db
+*.VC.VC.opendb
+*.psess
+*.vsp
+*.vspx
+*.sap
+*.svclog
+.builds
+*_i.c
+*_p.c
+*_h.h
+*.ilk
+*.meta
+*.obj
+*.iobj
+*.ipdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp
+*.tmp_proj
+*_wpftmp.csproj
+*.vspscc
+*.vssscc
+.builds
+
+## === NuGet ===
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+
+## === Resultados de pruebas ===
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+TestResults/
+
+## === Archivos temporales del sistema operativo ===
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+*~
+*.swp
+*.bak
+*.orig
+*.rej
+
+## === SQL Server / SSMS ===
+*.mdf
+*.ldf
+*.ndf
+*.bak
+*.dbmdl
+*.jfm
+UpgradeLog*.htm
+ScaffoldingReadMe.txt
+
+## === Logs locales de la aplicacion (pueden contener datos operativos) ===
+logs/
+*.log
+
+## === Archivos locales del estudiante que no forman parte de la entrega ===
+/local/
+/scratch/
