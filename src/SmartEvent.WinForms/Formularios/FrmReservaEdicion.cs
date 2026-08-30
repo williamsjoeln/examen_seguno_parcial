@@ -288,7 +288,7 @@ internal sealed class FrmReservaEdicion : Form
         _lblDuracion.Font = new Font("Segoe UI", 8.5F);
         panel.Controls.Add(_lblDuracion);
 
-        panel.Controls.Add(CrearEtiqueta("N.o de invitados *", 650, 120));
+        panel.Controls.Add(CrearEtiqueta("Invitados *", 650, 120));
 
         _numInvitados.Location = new Point(650, 138);
         _numInvitados.Size = new Size(85, 26);
@@ -300,7 +300,7 @@ internal sealed class FrmReservaEdicion : Form
         _numInvitados.ValueChanged += (_, _) => ActualizarInfoSalon();
         panel.Controls.Add(_numInvitados);
 
-        panel.Controls.Add(CrearEtiqueta("Descuento global %", 741, 120));
+        panel.Controls.Add(CrearEtiqueta("Desc. global %", 741, 120));
 
         _numDescuentoGlobal.Location = new Point(741, 138);
         _numDescuentoGlobal.Size = new Size(84, 26);
@@ -680,7 +680,11 @@ internal sealed class FrmReservaEdicion : Form
 
             _cboCliente.SelectedValue = reserva.IdCliente;
             _cboSalon.SelectedValue = reserva.IdSalon;
-            _dtpFecha.MinDate = DateTime.MinValue;
+            // Al editar una reserva ya existente hay que poder mostrar su fecha
+            // aunque sea anterior a hoy. Se usa DateTimePicker.MinimumDateTime
+            // (1/1/1753) y NO DateTime.MinValue (1/1/0001): el control rechaza
+            // cualquier valor anterior a esa fecha con ArgumentOutOfRangeException.
+            _dtpFecha.MinDate = DateTimePicker.MinimumDateTime;
             _dtpFecha.Value = reserva.FechaEvento.ToDateTime(TimeOnly.MinValue);
             _dtpHoraInicio.Value = DateTime.Today.Add(reserva.HoraInicio);
             _dtpHoraFin.Value = DateTime.Today.Add(reserva.HoraFin);
