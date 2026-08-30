@@ -1,0 +1,1236 @@
+using System.ComponentModel;
+using System.Globalization;
+using SmartEvent.Aplicacion.Contratos;
+using SmartEvent.Aplicacion.Dto;
+using SmartEvent.Aplicacion.Servicios;
+using SmartEvent.Aplicacion.Sesion;
+using SmartEvent.Dominio.Entidades;
+using SmartEvent.Dominio.Enumeraciones;
+using SmartEvent.Dominio.Reglas;
+using SmartEvent.WinForms.Comun;
+
+namespace SmartEvent.WinForms.Formularios;
+
+/// <summary>
+/// Alta y edicion de una reserva, con su cabecera y su detalle.
+///
+/// Es el formulario central del examen. Cubre los requisitos F15 a F25:
+/// cabecera, busqueda de cliente y salon, fecha y horario, grilla editable de
+/// detalles, calculo en tiempo real, validaciones, guardar, analizar con IA,
+/// confirmar y cancelar.
+///
+/// DOS IDEAS QUE CONVIENE SABER EXPLICAR:
+///
+/// 1. El calculo en tiempo real usa la MISMA clase de dominio
+///    (CalculadoraTotales) que replica la aritmetica del procedimiento
+///    almacenado. Pero al guardar NO se envia ningun total: el procedimiento
+///    los recalcula y lo que persiste es su resultado. Por eso, despues de
+///    guardar, el formulario recarga la reserva desde la base de datos y
+///    muestra los importes que devolvio SQL Server.
+///
+/// 2. Una reserva CONFIRMADA bloquea todos los controles de edicion. La
+///    interfaz lo hace por comodidad, pero aunque alguien la forzara, el
+///    procedimiento rechazaria el guardado con el error 50011.
+/// </summary>
+internal sealed class FrmReservaEdicion : Form
+{
+    private readonly ServicioReservas _reservas;
+    private readonly ServicioCatalogos _catalogos;
+    private readonly IServicioAnalisisIa _ia;
+    private readonly SesionUsuario _sesion;
+    private readonly IRegistradorSeguro _registro;
+
+    private static readonly CultureInfo Cultura = CultureInfo.GetCultureInfo("es-EC");
+
+    // ---------- Estado ----------
+    private int _idReserva;
+    private EstadoReserva _estado = EstadoReserva.Borrador;
+    private string _codigo = string.Empty;
+    private List<Cliente> _clientes = [];
+    private List<Salon> _salones = [];
+    private List<Recurso> _recursos = [];
+    private readonly BindingList<FilaDetalle> _detalles = [];
+    private CancellationTokenSource? _cancelacion;
+    private CancellationTokenSource? _cancelacionIa;
+    private bool _cargando;
+
+    /// <summary>Identificador de la reserva abierta. Lo usa FrmPrincipal para no duplicar ventanas.</summary>
+    public int IdReservaActual => _idReserva;
+
+    // ---------- Controles de cabecera ----------
+    private readonly ComboBox _cboCliente = new();
+    private readonly TextBox _txtBuscarCliente = new();
+    private readonly ComboBox _cboSalon = new();
+    private readonly Label _lblInfoSalon = new();
+    private readonly DateTimePicker _dtpFecha = new();
+    private readonly DateTimePicker _dtpHoraInicio = new();
+    private readonly DateTimePicker _dtpHoraFin = new();
+    private readonly NumericUpDown _numInvitados = new();
+    private readonly NumericUpDown _numDescuentoGlobal = new();
+    private readonly TextBox _txtObservacion = new();
+    private readonly Label _lblEstado = new();
+    private readonly Label _lblCodigo = new();
+    private readonly Label _lblDuracion = new();
+
+    // ---------- Detalle ----------
+    private readonly DataGridView _grilla = new();
+    private readonly Button _btnAgregarLinea = new();
+    private readonly Button _btnQuitarLinea = new();
+
+    // ---------- Totales ----------
+    private readonly Label _lblSubtotal = new();
+    private readonly Label _lblDescuento = new();
+    private readonly Label _lblImpuesto = new();
+    private readonly Label _lblTotal = new();
+
+    // ---------- Acciones ----------
+    private readonly Button _btnGuardar = new();
+    private readonly Button _btnAnalizarIa = new();
+    private readonly Button _btnCancelarIa = new();
+    private readonly Button _btnConfirmar = new();
+    private readonly Button _btnCancelarReserva = new();
+    private readonly Button _btnVerificarDisponibilidad = new();
+    private readonly Label _lblEstadoOperacion = new();
+
+    public FrmReservaEdicion(
+        ServicioReservas reservas,
+        ServicioCatalogos catalogos,
+        IServicioAnalisisIa ia,
+        SesionUsuario sesion,
+        IRegistradorSeguro registro)
+    {
+        _reservas = reservas ?? throw new ArgumentNullException(nameof(reservas));
+        _catalogos = catalogos ?? throw new ArgumentNullException(nameof(catalogos));
+        _ia = ia ?? throw new ArgumentNullException(nameof(ia));
+        _sesion = sesion ?? throw new ArgumentNullException(nameof(sesion));
+        _registro = registro ?? throw new ArgumentNullException(nameof(registro));
+
+        ConstruirInterfaz();
+    }
+
+    /// <summary>Prepara el formulario para crear una reserva nueva.</summary>
+    public void PrepararNueva()
+    {
+        _idReserva = 0;
+        _estado = EstadoReserva.Borrador;
+        _codigo = string.Empty;
+        Text = "Nueva reserva";
+    }
+
+    /// <summary>Prepara el formulario para editar una reserva existente.</summary>
+    public void PrepararEdicion(int idReserva)
+    {
+        _idReserva = idReserva;
+        Text = "Reserva";
+    }
+
+    // =====================================================================
+    // CONSTRUCCION DE LA INTERFAZ
+    // =====================================================================
+
+    private void ConstruirInterfaz()
+    {
+        Text = "Reserva";
+        WindowState = FormWindowState.Maximized;
+        BackColor = AyudasUi.Paleta.Fondo;
+        Font = new Font("Segoe UI", 9F);
+        MinimumSize = new Size(1120, 720);
+
+        var contenedor = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            Padding = new Padding(12),
+            BackColor = AyudasUi.Paleta.Fondo
+        };
+
+        contenedor.RowStyles.Add(new RowStyle(SizeType.Absolute, 232)); // cabecera
+        contenedor.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // detalle
+        contenedor.RowStyles.Add(new RowStyle(SizeType.Absolute, 116)); // totales
+        contenedor.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));  // acciones
+
+        contenedor.Controls.Add(ConstruirPanelCabecera(), 0, 0);
+        contenedor.Controls.Add(ConstruirPanelDetalle(), 0, 1);
+        contenedor.Controls.Add(ConstruirPanelTotales(), 0, 2);
+        contenedor.Controls.Add(ConstruirPanelAcciones(), 0, 3);
+
+        Controls.Add(contenedor);
+
+        Shown += FrmReservaEdicionShown;
+        FormClosing += (_, _) =>
+        {
+            _cancelacion?.Cancel();
+            _cancelacionIa?.Cancel();
+        };
+    }
+
+    private Panel ConstruirPanelCabecera()
+    {
+        var panel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderStyle = BorderStyle.FixedSingle,
+            Padding = new Padding(14)
+        };
+
+        // ---------- Titulo y estado ----------
+        _lblCodigo.Text = "Nueva reserva";
+        _lblCodigo.Font = new Font("Segoe UI", 13F, FontStyle.Bold);
+        _lblCodigo.ForeColor = AyudasUi.Paleta.Primario;
+        _lblCodigo.AutoSize = true;
+        _lblCodigo.Location = new Point(14, 10);
+        panel.Controls.Add(_lblCodigo);
+
+        _lblEstado.Text = "BORRADOR";
+        _lblEstado.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+        _lblEstado.AutoSize = false;
+        _lblEstado.Size = new Size(130, 26);
+        _lblEstado.TextAlign = ContentAlignment.MiddleCenter;
+        _lblEstado.Location = new Point(300, 12);
+        panel.Controls.Add(_lblEstado);
+
+        // ---------- Cliente ----------
+        panel.Controls.Add(CrearEtiqueta("Cliente *", 14, 48));
+
+        _txtBuscarCliente.Location = new Point(14, 66);
+        _txtBuscarCliente.Size = new Size(200, 26);
+        _txtBuscarCliente.BorderStyle = BorderStyle.FixedSingle;
+        _txtBuscarCliente.PlaceholderText = "Filtrar cliente...";
+        _txtBuscarCliente.TextChanged += (_, _) => FiltrarClientes();
+        panel.Controls.Add(_txtBuscarCliente);
+
+        _cboCliente.Location = new Point(220, 66);
+        _cboCliente.Size = new Size(360, 26);
+        _cboCliente.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cboCliente.FlatStyle = FlatStyle.Flat;
+        _cboCliente.DisplayMember = nameof(Cliente.Descripcion);
+        _cboCliente.ValueMember = nameof(Cliente.IdCliente);
+        panel.Controls.Add(_cboCliente);
+
+        // ---------- Salon ----------
+        panel.Controls.Add(CrearEtiqueta("Salon *", 600, 48));
+
+        _cboSalon.Location = new Point(600, 66);
+        _cboSalon.Size = new Size(300, 26);
+        _cboSalon.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cboSalon.FlatStyle = FlatStyle.Flat;
+        _cboSalon.DisplayMember = nameof(Salon.Descripcion);
+        _cboSalon.ValueMember = nameof(Salon.IdSalon);
+        _cboSalon.SelectedIndexChanged += (_, _) => { ActualizarInfoSalon(); RecalcularTotales(); };
+        panel.Controls.Add(_cboSalon);
+
+        _lblInfoSalon.Location = new Point(910, 68);
+        _lblInfoSalon.Size = new Size(280, 24);
+        _lblInfoSalon.ForeColor = AyudasUi.Paleta.TextoSuave;
+        _lblInfoSalon.Font = new Font("Segoe UI", 8.5F);
+        panel.Controls.Add(_lblInfoSalon);
+
+        // ---------- Fecha y horario ----------
+        panel.Controls.Add(CrearEtiqueta("Fecha del evento *", 14, 104));
+
+        _dtpFecha.Location = new Point(14, 122);
+        _dtpFecha.Size = new Size(200, 26);
+        _dtpFecha.Format = DateTimePickerFormat.Long;
+        _dtpFecha.MinDate = DateTime.Today;
+        _dtpFecha.Value = DateTime.Today.AddDays(7);
+        panel.Controls.Add(_dtpFecha);
+
+        panel.Controls.Add(CrearEtiqueta("Hora inicio *", 224, 104));
+
+        ConfigurarHora(_dtpHoraInicio, new TimeSpan(9, 0, 0));
+        _dtpHoraInicio.Location = new Point(224, 122);
+        _dtpHoraInicio.Size = new Size(110, 26);
+        _dtpHoraInicio.ValueChanged += (_, _) => ActualizarDuracion();
+        panel.Controls.Add(_dtpHoraInicio);
+
+        panel.Controls.Add(CrearEtiqueta("Hora fin *", 344, 104));
+
+        ConfigurarHora(_dtpHoraFin, new TimeSpan(13, 0, 0));
+        _dtpHoraFin.Location = new Point(344, 122);
+        _dtpHoraFin.Size = new Size(110, 26);
+        _dtpHoraFin.ValueChanged += (_, _) => ActualizarDuracion();
+        panel.Controls.Add(_dtpHoraFin);
+
+        _lblDuracion.Location = new Point(464, 126);
+        _lblDuracion.Size = new Size(230, 20);
+        _lblDuracion.Font = new Font("Segoe UI", 8.5F);
+        panel.Controls.Add(_lblDuracion);
+
+        // ---------- Invitados y descuento ----------
+        panel.Controls.Add(CrearEtiqueta("N.° de invitados *", 700, 104));
+
+        _numInvitados.Location = new Point(700, 122);
+        _numInvitados.Size = new Size(100, 26);
+        _numInvitados.Minimum = 1;
+        _numInvitados.Maximum = 100_000;
+        _numInvitados.Value = 50;
+        _numInvitados.BorderStyle = BorderStyle.FixedSingle;
+        _numInvitados.TextAlign = HorizontalAlignment.Right;
+        _numInvitados.ValueChanged += (_, _) => ActualizarInfoSalon();
+        panel.Controls.Add(_numInvitados);
+
+        panel.Controls.Add(CrearEtiqueta("Descuento global (%)", 810, 104));
+
+        _numDescuentoGlobal.Location = new Point(810, 122);
+        _numDescuentoGlobal.Size = new Size(90, 26);
+        _numDescuentoGlobal.Minimum = 0;
+        _numDescuentoGlobal.Maximum = ReglasReserva.DescuentoMaximoPorcentaje;
+        _numDescuentoGlobal.DecimalPlaces = 2;
+        _numDescuentoGlobal.BorderStyle = BorderStyle.FixedSingle;
+        _numDescuentoGlobal.TextAlign = HorizontalAlignment.Right;
+        _numDescuentoGlobal.ValueChanged += (_, _) => { AvisarDescuentoAlto(); RecalcularTotales(); };
+        panel.Controls.Add(_numDescuentoGlobal);
+
+        // ---------- Observacion ----------
+        panel.Controls.Add(CrearEtiqueta("Observacion", 14, 160));
+
+        _txtObservacion.Location = new Point(14, 178);
+        _txtObservacion.Size = new Size(886, 26);
+        _txtObservacion.MaxLength = 500;
+        _txtObservacion.BorderStyle = BorderStyle.FixedSingle;
+        panel.Controls.Add(_txtObservacion);
+
+        _btnVerificarDisponibilidad.Text = "Verificar disponibilidad";
+        _btnVerificarDisponibilidad.Location = new Point(910, 176);
+        _btnVerificarDisponibilidad.Size = new Size(190, 30);
+        _btnVerificarDisponibilidad.EstiloSecundario();
+        _btnVerificarDisponibilidad.Click += async (_, _) => await VerificarDisponibilidadAsync();
+        panel.Controls.Add(_btnVerificarDisponibilidad);
+
+        return panel;
+    }
+
+    private Panel ConstruirPanelDetalle()
+    {
+        var panel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderStyle = BorderStyle.FixedSingle,
+            Padding = new Padding(14),
+            Margin = new Padding(0, 10, 0, 10)
+        };
+
+        var barra = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = Color.White };
+
+        barra.Controls.Add(new Label
+        {
+            Text = "Recursos y servicios",
+            Font = new Font("Segoe UI", 11F, FontStyle.Bold),
+            ForeColor = AyudasUi.Paleta.Primario,
+            AutoSize = true,
+            Location = new Point(0, 8)
+        });
+
+        _btnAgregarLinea.Text = "Agregar linea";
+        _btnAgregarLinea.Location = new Point(240, 4);
+        _btnAgregarLinea.Size = new Size(140, 32);
+        _btnAgregarLinea.EstiloSecundario();
+        _btnAgregarLinea.Click += (_, _) => AgregarLinea();
+        barra.Controls.Add(_btnAgregarLinea);
+
+        _btnQuitarLinea.Text = "Quitar linea";
+        _btnQuitarLinea.Location = new Point(388, 4);
+        _btnQuitarLinea.Size = new Size(130, 32);
+        _btnQuitarLinea.EstiloSecundario();
+        _btnQuitarLinea.Click += (_, _) => QuitarLinea();
+        barra.Controls.Add(_btnQuitarLinea);
+
+        barra.Controls.Add(new Label
+        {
+            Text = "Un recurso no puede repetirse. El subtotal se calcula solo.",
+            ForeColor = AyudasUi.Paleta.TextoSuave,
+            Font = new Font("Segoe UI", 8.5F),
+            AutoSize = true,
+            Location = new Point(530, 14)
+        });
+
+        ConstruirGrilla();
+
+        panel.Controls.Add(_grilla);
+        panel.Controls.Add(barra);
+
+        return panel;
+    }
+
+    /// <summary>
+    /// Configura la grilla editable del detalle.
+    ///
+    /// El recurso se elige en una lista desplegable dentro de la celda, para que
+    /// no se pueda escribir un identificador inexistente. Cantidad, precio y
+    /// descuento son editables; el subtotal NO lo es: se calcula.
+    /// </summary>
+    private void ConstruirGrilla()
+    {
+        _grilla.Dock = DockStyle.Fill;
+        _grilla.EstiloEstandar(soloLectura: false);
+        _grilla.AutoGenerateColumns = false;
+        _grilla.EditMode = DataGridViewEditMode.EditOnEnter;
+        _grilla.AllowUserToAddRows = false;
+
+        var columnaRecurso = new DataGridViewComboBoxColumn
+        {
+            Name = "IdRecurso",
+            HeaderText = "Recurso",
+            DataPropertyName = nameof(FilaDetalle.IdRecurso),
+            DisplayMember = nameof(Recurso.Descripcion),
+            ValueMember = nameof(Recurso.IdRecurso),
+            FlatStyle = FlatStyle.Flat,
+            FillWeight = 150,
+            DisplayStyle = DataGridViewComboBoxDisplayStyle.Nothing
+        };
+        _grilla.Columns.Add(columnaRecurso);
+
+        _grilla.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "Cantidad",
+            HeaderText = "Cantidad",
+            DataPropertyName = nameof(FilaDetalle.Cantidad),
+            FillWeight = 50,
+            DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleRight }
+        });
+
+        _grilla.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "PrecioUnitario",
+            HeaderText = "Precio unitario",
+            DataPropertyName = nameof(FilaDetalle.PrecioUnitario),
+            FillWeight = 60,
+            DefaultCellStyle = new DataGridViewCellStyle
+            {
+                Alignment = DataGridViewContentAlignment.MiddleRight,
+                Format = "N2"
+            }
+        });
+
+        _grilla.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "PorcentajeDescuento",
+            HeaderText = "Descuento %",
+            DataPropertyName = nameof(FilaDetalle.PorcentajeDescuento),
+            FillWeight = 50,
+            DefaultCellStyle = new DataGridViewCellStyle
+            {
+                Alignment = DataGridViewContentAlignment.MiddleRight,
+                Format = "N2"
+            }
+        });
+
+        _grilla.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "SubtotalLinea",
+            HeaderText = "Subtotal",
+            DataPropertyName = nameof(FilaDetalle.SubtotalLinea),
+            ReadOnly = true,
+            FillWeight = 60,
+            DefaultCellStyle = new DataGridViewCellStyle
+            {
+                Alignment = DataGridViewContentAlignment.MiddleRight,
+                Format = "N2",
+                BackColor = Color.FromArgb(248, 249, 250),
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
+            }
+        });
+
+        _grilla.DataSource = _detalles;
+
+        // El recalculo en tiempo real se dispara al terminar de editar una celda
+        // y tambien al cambiar la lista completa.
+        _grilla.CellValueChanged += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && !_cargando)
+            {
+                RecalcularTotales();
+            }
+        };
+
+        // Sin esto, un cambio en la lista desplegable no se confirma hasta que
+        // la celda pierde el foco, y el total se veria desfasado.
+        _grilla.CurrentCellDirtyStateChanged += (_, _) =>
+        {
+            if (_grilla.IsCurrentCellDirty)
+            {
+                _grilla.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            }
+        };
+
+        // Impide que un texto invalido en una celda numerica lance una
+        // excepcion sin controlar en medio de la edicion.
+        _grilla.DataError += (_, e) =>
+        {
+            e.ThrowException = false;
+            e.Cancel = true;
+        };
+
+        _detalles.ListChanged += (_, _) =>
+        {
+            if (!_cargando)
+            {
+                RecalcularTotales();
+            }
+        };
+    }
+
+    private Panel ConstruirPanelTotales()
+    {
+        var panel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderStyle = BorderStyle.FixedSingle,
+            Padding = new Padding(14)
+        };
+
+        panel.Controls.Add(new Label
+        {
+            Text = "Totales calculados en tiempo real. Al guardar, SQL Server los recalcula y su resultado es el definitivo.",
+            ForeColor = AyudasUi.Paleta.TextoSuave,
+            Font = new Font("Segoe UI", 8.5F, FontStyle.Italic),
+            AutoSize = true,
+            Location = new Point(14, 12)
+        });
+
+        ConfigurarEtiquetaTotal(panel, "Subtotal", _lblSubtotal, 14, 44, false);
+        ConfigurarEtiquetaTotal(panel, "Descuento", _lblDescuento, 234, 44, false);
+        ConfigurarEtiquetaTotal(panel, "Impuesto 15%", _lblImpuesto, 454, 44, false);
+        ConfigurarEtiquetaTotal(panel, "TOTAL", _lblTotal, 674, 44, true);
+
+        return panel;
+    }
+
+    private static void ConfigurarEtiquetaTotal(
+        Panel panel, string titulo, Label etiqueta, int x, int y, bool destacado)
+    {
+        panel.Controls.Add(new Label
+        {
+            Text = titulo,
+            Location = new Point(x, y),
+            AutoSize = true,
+            ForeColor = AyudasUi.Paleta.TextoSuave,
+            Font = new Font("Segoe UI", 8.5F)
+        });
+
+        etiqueta.Text = "0,00";
+        etiqueta.Location = new Point(x, y + 18);
+        etiqueta.Size = new Size(200, 30);
+        etiqueta.Font = new Font("Segoe UI", destacado ? 16F : 13F,
+            destacado ? FontStyle.Bold : FontStyle.Regular);
+        etiqueta.ForeColor = destacado ? AyudasUi.Paleta.Primario : Color.Black;
+        panel.Controls.Add(etiqueta);
+    }
+
+    private Panel ConstruirPanelAcciones()
+    {
+        var panel = new Panel { Dock = DockStyle.Fill, BackColor = AyudasUi.Paleta.Fondo };
+
+        _btnGuardar.Text = "Guardar";
+        _btnGuardar.Location = new Point(0, 12);
+        _btnGuardar.Size = new Size(140, 38);
+        _btnGuardar.EstiloPrimario();
+        _btnGuardar.Click += async (_, _) => await GuardarAsync();
+        panel.Controls.Add(_btnGuardar);
+
+        _btnAnalizarIa.Text = "Analizar con IA";
+        _btnAnalizarIa.Location = new Point(150, 12);
+        _btnAnalizarIa.Size = new Size(160, 38);
+        _btnAnalizarIa.EstiloSecundario();
+        _btnAnalizarIa.Click += async (_, _) => await AnalizarConIaAsync();
+        panel.Controls.Add(_btnAnalizarIa);
+
+        _btnCancelarIa.Text = "Cancelar analisis";
+        _btnCancelarIa.Location = new Point(316, 12);
+        _btnCancelarIa.Size = new Size(150, 38);
+        _btnCancelarIa.EstiloSecundario();
+        _btnCancelarIa.Visible = false;
+        _btnCancelarIa.Click += (_, _) => _cancelacionIa?.Cancel();
+        panel.Controls.Add(_btnCancelarIa);
+
+        _btnConfirmar.Text = "Confirmar reserva";
+        _btnConfirmar.Location = new Point(320, 12);
+        _btnConfirmar.Size = new Size(170, 38);
+        _btnConfirmar.EstiloPrimario();
+        _btnConfirmar.BackColor = AyudasUi.Paleta.Exito;
+        _btnConfirmar.Click += async (_, _) => await ConfirmarAsync();
+        panel.Controls.Add(_btnConfirmar);
+
+        _btnCancelarReserva.Text = "Cancelar reserva";
+        _btnCancelarReserva.Location = new Point(500, 12);
+        _btnCancelarReserva.Size = new Size(160, 38);
+        _btnCancelarReserva.EstiloPeligro();
+        _btnCancelarReserva.Click += async (_, _) => await CancelarReservaAsync();
+        panel.Controls.Add(_btnCancelarReserva);
+
+        _lblEstadoOperacion.Location = new Point(680, 22);
+        _lblEstadoOperacion.Size = new Size(480, 22);
+        _lblEstadoOperacion.ForeColor = AyudasUi.Paleta.TextoSuave;
+        panel.Controls.Add(_lblEstadoOperacion);
+
+        return panel;
+    }
+
+    private static Label CrearEtiqueta(string texto, int x, int y) => new()
+    {
+        Text = texto,
+        Location = new Point(x, y),
+        AutoSize = true,
+        ForeColor = AyudasUi.Paleta.TextoSuave,
+        Font = new Font("Segoe UI", 8.5F)
+    };
+
+    private static void ConfigurarHora(DateTimePicker selector, TimeSpan valorInicial)
+    {
+        selector.Format = DateTimePickerFormat.Custom;
+        selector.CustomFormat = "HH:mm";
+        selector.ShowUpDown = true;
+        selector.Value = DateTime.Today.Add(valorInicial);
+    }
+
+    // =====================================================================
+    // CARGA INICIAL
+    // =====================================================================
+
+    private async void FrmReservaEdicionShown(object? sender, EventArgs e)
+    {
+        _cancelacion = new CancellationTokenSource();
+
+        await AyudasUi.EjecutarAsync(this, _registro, async () =>
+        {
+            _clientes = (await _catalogos.ConsultarClientesAsync(null, true, _cancelacion.Token)).ToList();
+            _salones = (await _catalogos.ConsultarSalonesAsync(null, true, _cancelacion.Token)).ToList();
+            _recursos = (await _catalogos.ConsultarRecursosAsync(null, true, _cancelacion.Token)).ToList();
+        }, "No se pudieron cargar los catalogos.");
+
+        _cboCliente.DataSource = _clientes;
+        _cboSalon.DataSource = _salones;
+
+        // La lista desplegable de la grilla se alimenta con los recursos activos.
+        ((DataGridViewComboBoxColumn)_grilla.Columns["IdRecurso"]!).DataSource = _recursos;
+
+        if (_idReserva > 0)
+        {
+            await CargarReservaAsync();
+        }
+        else
+        {
+            AgregarLinea();
+            ActualizarInfoSalon();
+            ActualizarDuracion();
+            AplicarEstadoAControles();
+        }
+    }
+
+    private async Task CargarReservaAsync()
+    {
+        if (_cancelacion is null) { return; }
+
+        var reserva = await AyudasUi.EjecutarAsync(this, _registro,
+            () => _reservas.ObtenerAsync(_idReserva, _cancelacion.Token),
+            "No se pudo cargar la reserva.");
+
+        if (reserva is null)
+        {
+            AyudasUi.MostrarAviso("La reserva solicitada ya no existe.");
+            Close();
+            return;
+        }
+
+        _cargando = true;
+
+        try
+        {
+            _estado = reserva.Estado;
+            _codigo = reserva.Codigo;
+
+            _cboCliente.SelectedValue = reserva.IdCliente;
+            _cboSalon.SelectedValue = reserva.IdSalon;
+            _dtpFecha.MinDate = DateTime.MinValue;
+            _dtpFecha.Value = reserva.FechaEvento.ToDateTime(TimeOnly.MinValue);
+            _dtpHoraInicio.Value = DateTime.Today.Add(reserva.HoraInicio);
+            _dtpHoraFin.Value = DateTime.Today.Add(reserva.HoraFin);
+            _numInvitados.Value = reserva.NumeroInvitados;
+            _numDescuentoGlobal.Value = reserva.PorcentajeDescuentoGlobal;
+            _txtObservacion.Text = reserva.Observacion ?? string.Empty;
+
+            _detalles.Clear();
+
+            foreach (var detalle in reserva.Detalles)
+            {
+                _detalles.Add(new FilaDetalle
+                {
+                    IdRecurso = detalle.IdRecurso,
+                    Cantidad = detalle.Cantidad,
+                    PrecioUnitario = detalle.PrecioUnitario,
+                    PorcentajeDescuento = detalle.PorcentajeDescuento,
+                    SubtotalLinea = detalle.SubtotalLinea
+                });
+            }
+        }
+        finally
+        {
+            _cargando = false;
+        }
+
+        Text = $"Reserva {reserva.Codigo}";
+        _lblCodigo.Text = reserva.Codigo;
+
+        // Se muestran los importes PERSISTIDOS, que son los que calculo SQL.
+        MostrarTotales(reserva.Subtotal, reserva.Descuento, reserva.Impuesto, reserva.Total);
+
+        ActualizarInfoSalon();
+        ActualizarDuracion();
+        AplicarEstadoAControles();
+    }
+
+    // =====================================================================
+    // CALCULO EN TIEMPO REAL
+    // =====================================================================
+
+    /// <summary>
+    /// Recalcula subtotales y totales con la misma aritmetica que
+    /// evt.sp_Reserva_Guardar. Se invoca en cada cambio de la grilla, del salon
+    /// o del descuento global.
+    /// </summary>
+    private void RecalcularTotales()
+    {
+        if (_cargando) { return; }
+
+        var salon = _cboSalon.SelectedItem as Salon;
+        var tarifaBase = salon?.TarifaBase ?? 0m;
+
+        foreach (var fila in _detalles)
+        {
+            fila.SubtotalLinea = CalculadoraTotales.CalcularSubtotalLinea(
+                fila.Cantidad, fila.PrecioUnitario, fila.PorcentajeDescuento);
+        }
+
+        var lineas = _detalles.Select(f =>
+            new LineaCalculo(f.Cantidad, f.PrecioUnitario, f.PorcentajeDescuento));
+
+        var totales = CalculadoraTotales.Calcular(tarifaBase, lineas, _numDescuentoGlobal.Value);
+
+        MostrarTotales(totales.Subtotal, totales.Descuento, totales.Impuesto, totales.Total);
+
+        _grilla.Refresh();
+    }
+
+    private void MostrarTotales(decimal subtotal, decimal descuento, decimal impuesto, decimal total)
+    {
+        _lblSubtotal.Text = subtotal.ToString("C2", Cultura);
+        _lblDescuento.Text = descuento > 0 ? "-" + descuento.ToString("C2", Cultura) : descuento.ToString("C2", Cultura);
+        _lblImpuesto.Text = impuesto.ToString("C2", Cultura);
+        _lblTotal.Text = total.ToString("C2", Cultura);
+    }
+
+    private void ActualizarInfoSalon()
+    {
+        if (_cboSalon.SelectedItem is not Salon salon)
+        {
+            _lblInfoSalon.Text = string.Empty;
+            return;
+        }
+
+        var invitados = (int)_numInvitados.Value;
+        var excede = invitados > salon.Capacidad;
+
+        _lblInfoSalon.Text =
+            $"Capacidad {salon.Capacidad} · Tarifa {salon.TarifaBase.ToString("C2", Cultura)}"
+            + (excede ? $"  ⚠ Excede en {invitados - salon.Capacidad}" : string.Empty);
+
+        _lblInfoSalon.ForeColor = excede ? AyudasUi.Paleta.Peligro : AyudasUi.Paleta.TextoSuave;
+    }
+
+    private void ActualizarDuracion()
+    {
+        var inicio = _dtpHoraInicio.Value.TimeOfDay;
+        var fin = _dtpHoraFin.Value.TimeOfDay;
+
+        if (fin <= inicio)
+        {
+            _lblDuracion.Text = "⚠ La hora de fin debe ser posterior";
+            _lblDuracion.ForeColor = AyudasUi.Paleta.Peligro;
+            return;
+        }
+
+        var horas = (fin - inicio).TotalHours;
+        var valida = ReglasReserva.DuracionEsValida(inicio, fin);
+
+        _lblDuracion.Text = valida
+            ? $"Duracion: {horas:0.#} horas"
+            : $"⚠ Duracion {horas:0.#} h (debe estar entre {ReglasReserva.DuracionMinimaHoras} y {ReglasReserva.DuracionMaximaHoras})";
+
+        _lblDuracion.ForeColor = valida ? AyudasUi.Paleta.Exito : AyudasUi.Paleta.Peligro;
+    }
+
+    private void AvisarDescuentoAlto()
+    {
+        if (_numDescuentoGlobal.Value > ReglasReserva.DescuentoSinPrivilegioPorcentaje
+            && !_sesion.EsAdministrador)
+        {
+            _lblEstadoOperacion.Text =
+                $"⚠ Un descuento superior al {ReglasReserva.DescuentoSinPrivilegioPorcentaje}% requiere rol ADMINISTRADOR.";
+            _lblEstadoOperacion.ForeColor = AyudasUi.Paleta.Peligro;
+        }
+        else
+        {
+            _lblEstadoOperacion.Text = string.Empty;
+        }
+    }
+
+    // =====================================================================
+    // GRILLA
+    // =====================================================================
+
+    private void AgregarLinea()
+    {
+        if (_recursos.Count == 0)
+        {
+            AyudasUi.MostrarAviso("No hay recursos activos disponibles.");
+            return;
+        }
+
+        // Se propone el primer recurso que aun no este en el detalle, para no
+        // crear duplicados de entrada (regla D08).
+        var usados = _detalles.Select(d => d.IdRecurso).ToHashSet();
+        var disponible = _recursos.FirstOrDefault(r => !usados.Contains(r.IdRecurso));
+
+        if (disponible is null)
+        {
+            AyudasUi.MostrarAviso("Ya se agregaron todos los recursos disponibles.");
+            return;
+        }
+
+        _detalles.Add(new FilaDetalle
+        {
+            IdRecurso = disponible.IdRecurso,
+            Cantidad = 1,
+            PrecioUnitario = disponible.PrecioUnitario,
+            PorcentajeDescuento = 0m
+        });
+
+        RecalcularTotales();
+    }
+
+    private void QuitarLinea()
+    {
+        if (_grilla.CurrentRow?.DataBoundItem is not FilaDetalle fila)
+        {
+            AyudasUi.MostrarAviso("Seleccione la linea que desea quitar.");
+            return;
+        }
+
+        _detalles.Remove(fila);
+        RecalcularTotales();
+    }
+
+    // =====================================================================
+    // ACCIONES
+    // =====================================================================
+
+    private SolicitudGuardarReserva ConstruirSolicitud() => new()
+    {
+        IdReserva = _idReserva > 0 ? _idReserva : null,
+        IdCliente = (_cboCliente.SelectedItem as Cliente)?.IdCliente ?? 0,
+        IdSalon = (_cboSalon.SelectedItem as Salon)?.IdSalon ?? 0,
+        FechaEvento = DateOnly.FromDateTime(_dtpFecha.Value),
+        HoraInicio = _dtpHoraInicio.Value.TimeOfDay,
+        HoraFin = _dtpHoraFin.Value.TimeOfDay,
+        NumeroInvitados = (int)_numInvitados.Value,
+        Observacion = string.IsNullOrWhiteSpace(_txtObservacion.Text) ? null : _txtObservacion.Text.Trim(),
+        PorcentajeDescuentoGlobal = _numDescuentoGlobal.Value,
+        IdUsuario = _sesion.IdUsuario,
+        Detalles = _detalles
+            .Select(d => new LineaDetalleSolicitud(
+                d.IdRecurso, d.Cantidad, d.PrecioUnitario, d.PorcentajeDescuento))
+            .ToList()
+    };
+
+    /// <summary>
+    /// Consulta previa de disponibilidad. Sirve para avisar al usuario ANTES de
+    /// guardar; el control definitivo lo hace el procedimiento almacenado
+    /// dentro de la transaccion.
+    /// </summary>
+    private async Task VerificarDisponibilidadAsync()
+    {
+        if (_cancelacion is null) { return; }
+
+        var conflictos = await AyudasUi.EjecutarAsync(this, _registro,
+            () => _reservas.ValidarDisponibilidadAsync(ConstruirSolicitud(), _cancelacion.Token),
+            "No se pudo verificar la disponibilidad.");
+
+        if (conflictos is null) { return; }
+
+        if (conflictos.Count == 0)
+        {
+            _lblEstadoOperacion.Text = "✓ Sin conflictos de disponibilidad.";
+            _lblEstadoOperacion.ForeColor = AyudasUi.Paleta.Exito;
+            AyudasUi.MostrarInformacion("La reserva es viable: no hay cruces de horario ni faltantes de stock.");
+            return;
+        }
+
+        _lblEstadoOperacion.Text = $"⚠ {conflictos.Count} conflicto(s) detectado(s).";
+        _lblEstadoOperacion.ForeColor = AyudasUi.Paleta.Peligro;
+
+        AyudasUi.MostrarAviso(
+            "Se detectaron los siguientes conflictos:" + Environment.NewLine + Environment.NewLine
+            + string.Join(Environment.NewLine, conflictos.Select(c => "• " + c.Mensaje)));
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_cancelacion is null) { return; }
+
+        var salon = _cboSalon.SelectedItem as Salon;
+        var solicitud = ConstruirSolicitud();
+
+        var resultado = await AyudasUi.EjecutarAsync(this, _registro,
+            () => _reservas.GuardarAsync(solicitud, salon?.Capacidad ?? 0, _cancelacion.Token),
+            "No se pudo guardar la reserva.");
+
+        if (resultado is null) { return; }
+
+        _idReserva = resultado.IdReserva;
+        _codigo = resultado.Codigo;
+        Text = $"Reserva {_codigo}";
+        _lblCodigo.Text = _codigo;
+
+        _lblEstadoOperacion.Text = "✓ " + resultado.Mensaje;
+        _lblEstadoOperacion.ForeColor = AyudasUi.Paleta.Exito;
+
+        // Se recarga desde la base para mostrar los importes que calculo SQL
+        // Server, que son los definitivos.
+        await CargarReservaAsync();
+
+        AyudasUi.MostrarInformacion(resultado.Mensaje);
+    }
+
+    /// <summary>
+    /// Ejecuta el analisis de IA sin bloquear la interfaz y permitiendo
+    /// cancelarlo, tal como exige el examen.
+    /// </summary>
+    private async Task AnalizarConIaAsync()
+    {
+        if (_idReserva == 0)
+        {
+            AyudasUi.MostrarAviso("Guarde la reserva antes de analizarla con IA.");
+            return;
+        }
+
+        if (!_ia.EstaConfigurado
+            && !AyudasUi.Confirmar(
+                "No hay una clave de OpenAI configurada, por lo que el analisis fallara."
+                + Environment.NewLine + Environment.NewLine
+                + "Desea intentarlo de todas formas para ver el mensaje de contingencia?"))
+        {
+            return;
+        }
+
+        _cancelacionIa?.Dispose();
+        _cancelacionIa = new CancellationTokenSource();
+
+        _btnAnalizarIa.Enabled = false;
+        _btnAnalizarIa.Text = "Analizando...";
+        _btnCancelarIa.Visible = true;
+        _lblEstadoOperacion.Text = "Consultando el servicio de analisis...";
+        _lblEstadoOperacion.ForeColor = AyudasUi.Paleta.TextoSuave;
+
+        try
+        {
+            var reserva = await _reservas.ObtenerAsync(_idReserva, _cancelacionIa.Token);
+
+            if (reserva is null)
+            {
+                AyudasUi.MostrarAviso("La reserva ya no existe.");
+                return;
+            }
+
+            var ejecucion = await _reservas.AnalizarConIaAsync(reserva, _cancelacionIa.Token);
+
+            if (!ejecucion.Exitoso)
+            {
+                _lblEstadoOperacion.Text = "⚠ El analisis no se completo. Quedo registrado en la auditoria.";
+                _lblEstadoOperacion.ForeColor = AyudasUi.Paleta.Peligro;
+
+                AyudasUi.MostrarAviso(
+                    ejecucion.MensajeUsuario
+                    ?? "No se pudo completar el analisis. La reserva no sufrio ningun cambio.");
+                return;
+            }
+
+            _lblEstadoOperacion.Text =
+                $"✓ Analisis completado. Nivel de riesgo: {ejecucion.Resultado!.NivelRiesgo}.";
+            _lblEstadoOperacion.ForeColor = AyudasUi.Paleta.Exito;
+
+            using var dialogo = new FrmAnalisisIa(
+                ejecucion.Resultado, ejecucion.Proveedor, ejecucion.Modelo, ejecucion.DuracionMs);
+            dialogo.ShowDialog(this);
+        }
+        catch (OperationCanceledException)
+        {
+            _lblEstadoOperacion.Text = "Analisis cancelado por el usuario.";
+            _lblEstadoOperacion.ForeColor = AyudasUi.Paleta.TextoSuave;
+        }
+        catch (Exception ex)
+        {
+            _registro.Error("Error no controlado al analizar con IA.", ex);
+            AyudasUi.MostrarError(
+                "No se pudo completar el analisis. El detalle quedo en el archivo de registro.");
+        }
+        finally
+        {
+            _btnAnalizarIa.Enabled = true;
+            _btnAnalizarIa.Text = "Analizar con IA";
+            _btnCancelarIa.Visible = false;
+        }
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (_cancelacion is null) { return; }
+
+        if (_idReserva == 0)
+        {
+            AyudasUi.MostrarAviso("Guarde la reserva antes de confirmarla.");
+            return;
+        }
+
+        if (!AyudasUi.Confirmar(
+            "Al confirmar, la reserva ya no podra editarse y se notificara al cliente por correo."
+            + Environment.NewLine + Environment.NewLine + "Desea continuar?"))
+        {
+            return;
+        }
+
+        var resultado = await AyudasUi.EjecutarAsync(this, _registro,
+            () => _reservas.ConfirmarAsync(_idReserva, _cancelacion.Token),
+            "No se pudo confirmar la reserva.");
+
+        // Si el rechazo fue por falta de analisis de IA, se ofrece la
+        // contingencia manual que contempla la regla D22.
+        if (resultado is null)
+        {
+            await OfrecerContingenciaAsync();
+            return;
+        }
+
+        _lblEstadoOperacion.Text = resultado.TodoCorrecto
+            ? "✓ Reserva confirmada y cliente notificado."
+            : "Reserva confirmada. Revise el estado del correo.";
+
+        _lblEstadoOperacion.ForeColor = resultado.TodoCorrecto
+            ? AyudasUi.Paleta.Exito
+            : AyudasUi.Paleta.Peligro;
+
+        await CargarReservaAsync();
+        AyudasUi.MostrarInformacion(resultado.MensajeResumen);
+    }
+
+    /// <summary>
+    /// Ofrece registrar una justificacion de contingencia cuando la
+    /// confirmacion se rechazo por falta de analisis de IA.
+    ///
+    /// Es la via que el propio examen contempla: "analisis de IA exitoso O una
+    /// justificacion manual de contingencia guardada en auditoria".
+    /// </summary>
+    private async Task OfrecerContingenciaAsync()
+    {
+        if (_cancelacion is null) { return; }
+
+        if (!AyudasUi.Confirmar(
+            "Si el analisis de IA no esta disponible, puede registrar una justificacion "
+            + "de contingencia para poder confirmar la reserva."
+            + Environment.NewLine + Environment.NewLine
+            + "Esa justificacion queda auditada con su usuario y la fecha."
+            + Environment.NewLine + Environment.NewLine
+            + "Desea registrarla ahora?"))
+        {
+            return;
+        }
+
+        using var dialogo = new FrmTextoRequerido(
+            "Justificacion de contingencia",
+            "Explique por que se confirma esta reserva sin un analisis de IA exitoso. "
+            + $"Minimo {ReglasReserva.LongitudMinimaJustificacionContingencia} caracteres.",
+            ReglasReserva.LongitudMinimaJustificacionContingencia);
+
+        if (dialogo.ShowDialog(this) != DialogResult.OK) { return; }
+
+        var registrada = await AyudasUi.EjecutarAsync(this, _registro,
+            () => _reservas.RegistrarContingenciaIaAsync(_idReserva, dialogo.TextoCapturado, _cancelacion.Token),
+            "No se pudo registrar la justificacion de contingencia.");
+
+        if (!registrada) { return; }
+
+        AyudasUi.MostrarInformacion(
+            "Justificacion registrada y auditada. Ahora puede confirmar la reserva.");
+    }
+
+    private async Task CancelarReservaAsync()
+    {
+        if (_cancelacion is null) { return; }
+
+        if (_idReserva == 0)
+        {
+            AyudasUi.MostrarAviso("La reserva todavia no se ha guardado.");
+            return;
+        }
+
+        using var dialogo = new FrmTextoRequerido(
+            "Cancelar reserva",
+            "Indique el motivo de la cancelacion. Quedara registrado en la auditoria y se "
+            + $"incluira en el correo al cliente. Minimo {ReglasReserva.LongitudMinimaMotivoCancelacion} caracteres.",
+            ReglasReserva.LongitudMinimaMotivoCancelacion);
+
+        if (dialogo.ShowDialog(this) != DialogResult.OK) { return; }
+
+        var resultado = await AyudasUi.EjecutarAsync(this, _registro,
+            () => _reservas.CancelarAsync(_idReserva, dialogo.TextoCapturado, _cancelacion.Token),
+            "No se pudo cancelar la reserva.");
+
+        if (resultado is null) { return; }
+
+        await CargarReservaAsync();
+        AyudasUi.MostrarInformacion(resultado.MensajeResumen);
+    }
+
+    // =====================================================================
+    // ESTADO DE LOS CONTROLES
+    // =====================================================================
+
+    /// <summary>
+    /// Habilita o bloquea los controles segun el estado de la reserva.
+    ///
+    /// Refleja la regla D19: una reserva CONFIRMADA no puede editar cliente,
+    /// salon, fecha, horario ni detalles; solo cancelarse o finalizarse. Y las
+    /// reservas FINALIZADA o CANCELADA son terminales.
+    /// </summary>
+    private void AplicarEstadoAControles()
+    {
+        var editable = _estado == EstadoReserva.Borrador;
+        var terminal = MaquinaEstadosReserva.EsTerminal(_estado);
+
+        _lblEstado.Text = MaquinaEstadosReserva.ATexto(_estado);
+        _lblEstado.BackColor = AyudasUi.ColorFondoEstado(_estado);
+        _lblEstado.ForeColor = AyudasUi.ColorTextoEstado(_estado);
+
+        _cboCliente.Enabled = editable;
+        _txtBuscarCliente.Enabled = editable;
+        _cboSalon.Enabled = editable;
+        _dtpFecha.Enabled = editable;
+        _dtpHoraInicio.Enabled = editable;
+        _dtpHoraFin.Enabled = editable;
+        _numInvitados.Enabled = editable;
+        _numDescuentoGlobal.Enabled = editable;
+        _txtObservacion.Enabled = editable;
+        _grilla.ReadOnly = !editable;
+        _btnAgregarLinea.Enabled = editable;
+        _btnQuitarLinea.Enabled = editable;
+        _btnVerificarDisponibilidad.Enabled = editable;
+
+        _btnGuardar.Enabled = editable && _sesion.Tiene(Permiso.GestionarReservas);
+        _btnAnalizarIa.Enabled = !terminal && _sesion.Tiene(Permiso.AnalizarConIa);
+        _btnConfirmar.Enabled = editable && _sesion.Tiene(Permiso.ConfirmarReserva);
+        _btnCancelarReserva.Enabled = !terminal && _sesion.Tiene(Permiso.CancelarReserva);
+
+        if (terminal)
+        {
+            _lblEstadoOperacion.Text =
+                $"Esta reserva esta {MaquinaEstadosReserva.ATexto(_estado)} y ya no admite cambios.";
+            _lblEstadoOperacion.ForeColor = AyudasUi.Paleta.TextoSuave;
+        }
+    }
+
+    private void FiltrarClientes()
+    {
+        var texto = _txtBuscarCliente.Text.Trim();
+
+        var filtrados = string.IsNullOrWhiteSpace(texto)
+            ? _clientes
+            : _clientes.Where(c =>
+                    c.Nombres.Contains(texto, StringComparison.OrdinalIgnoreCase)
+                    || c.Identificacion.Contains(texto, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        var seleccionado = (_cboCliente.SelectedItem as Cliente)?.IdCliente;
+
+        _cboCliente.DataSource = filtrados;
+
+        if (seleccionado.HasValue && filtrados.Exists(c => c.IdCliente == seleccionado.Value))
+        {
+            _cboCliente.SelectedValue = seleccionado.Value;
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _cancelacion?.Cancel();
+            _cancelacion?.Dispose();
+            _cancelacionIa?.Cancel();
+            _cancelacionIa?.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    /// <summary>
+    /// Fila editable de la grilla del detalle.
+    ///
+    /// Implementa INotifyPropertyChanged para que la grilla refresque el
+    /// subtotal en cuanto cambian cantidad, precio o descuento: es lo que hace
+    /// que el "calculo en tiempo real" se vea de verdad.
+    /// </summary>
+    private sealed class FilaDetalle : System.ComponentModel.INotifyPropertyChanged
+    {
+        private int _idRecurso;
+        private int _cantidad = 1;
+        private decimal _precioUnitario;
+        private decimal _porcentajeDescuento;
+        private decimal _subtotalLinea;
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
+        public int IdRecurso
+        {
+            get => _idRecurso;
+            set => Asignar(ref _idRecurso, value, nameof(IdRecurso));
+        }
+
+        public int Cantidad
+        {
+            get => _cantidad;
+            set => Asignar(ref _cantidad, value, nameof(Cantidad));
+        }
+
+        public decimal PrecioUnitario
+        {
+            get => _precioUnitario;
+            set => Asignar(ref _precioUnitario, value, nameof(PrecioUnitario));
+        }
+
+        public decimal PorcentajeDescuento
+        {
+            get => _porcentajeDescuento;
+            set => Asignar(ref _porcentajeDescuento, value, nameof(PorcentajeDescuento));
+        }
+
+        public decimal SubtotalLinea
+        {
+            get => _subtotalLinea;
+            set => Asignar(ref _subtotalLinea, value, nameof(SubtotalLinea));
+        }
+
+        private void Asignar<T>(ref T campo, T valor, string nombre)
+        {
+            if (EqualityComparer<T>.Default.Equals(campo, valor))
+            {
+                return;
+            }
+
+            campo = valor;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nombre));
+        }
+    }
+}
