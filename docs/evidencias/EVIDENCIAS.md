@@ -36,7 +36,7 @@ Cada bloque imprime `OK` o `FALLO`.
 
 ## Índice de capturas
 
-Las capturas se guardan en esta carpeta con el nombre `NN-descripcion.png`.
+**Guarde TODAS las capturas en esta misma carpeta** (`docs/evidencias/`) con exactamente estos nombres. El formato debe ser PNG.
 
 | Nº | Archivo | Caso |
 |---|---|---|

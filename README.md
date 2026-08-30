@@ -316,8 +316,8 @@ SmartEventAI.sln
 │   ├── generar-modelo-datos.ps1     Regenera el diagrama
 │   ├── CHECKLIST_EXAMEN.md          Los 141 requisitos rastreados
 │   ├── USO_IA.md                    Uso honesto de IA en el desarrollo
-│   ├── capturas/                    Capturas de los formularios
-│   └── evidencias/                  Evidencias de CA-01 a CA-10
+│   ├── AUDITORIA_FINAL.md           Requisito por requisito, dónde está y cómo se prueba
+│   └── evidencias/                  Capturas numeradas y evidencias de CA-01 a CA-10
 │
 ├── src/
 │   ├── SmartEvent.Dominio/          Entidades, reglas puras, PBKDF2
