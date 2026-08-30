@@ -78,7 +78,7 @@ internal sealed class FrmAuditoriaIntegraciones : Form
         WindowState = FormWindowState.Maximized;
         BackColor = AyudasUi.Paleta.Fondo;
         Font = new Font("Segoe UI", 9F);
-        MinimumSize = new Size(1120, 660);
+        MinimumSize = new Size(900, 600);
 
         _pestanas.Dock = DockStyle.Fill;
         _pestanas.Font = new Font("Segoe UI", 10F);

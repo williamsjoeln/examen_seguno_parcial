@@ -67,6 +67,7 @@ internal sealed class FrmReservaEdicion : Form
     // ---------- Controles de cabecera ----------
     private readonly ComboBox _cboCliente = new();
     private readonly TextBox _txtBuscarCliente = new();
+    private readonly Label _lblAvisoCliente = new();
     private readonly ComboBox _cboSalon = new();
     private readonly Label _lblInfoSalon = new();
     private readonly DateTimePicker _dtpFecha = new();
@@ -141,7 +142,7 @@ internal sealed class FrmReservaEdicion : Form
         WindowState = FormWindowState.Maximized;
         BackColor = AyudasUi.Paleta.Fondo;
         Font = new Font("Segoe UI", 9F);
-        MinimumSize = new Size(1120, 720);
+        MinimumSize = new Size(900, 660);
 
         var contenedor = new TableLayoutPanel
         {
@@ -172,6 +173,16 @@ internal sealed class FrmReservaEdicion : Form
         };
     }
 
+    /// <summary>
+    /// Construye la cabecera de la reserva.
+    ///
+    /// DISTRIBUCION: todas las posiciones caben dentro de unos 820 pixeles de
+    /// ancho, y la observacion se ancla a izquierda y derecha para crecer con la
+    /// ventana. La primera version usaba coordenadas de hasta 1100 pixeles y en
+    /// una ventana algo mas estrecha se cortaban por la derecha el boton de
+    /// verificar disponibilidad y la tarifa del salon. Ese boton se movio a la
+    /// barra de acciones inferior, donde siempre hay sitio.
+    /// </summary>
     private Panel ConstruirPanelCabecera()
     {
         var panel = new Panel
@@ -198,29 +209,40 @@ internal sealed class FrmReservaEdicion : Form
         _lblEstado.Location = new Point(300, 12);
         panel.Controls.Add(_lblEstado);
 
-        // ---------- Cliente ----------
-        panel.Controls.Add(CrearEtiqueta("Cliente *", 14, 48));
+        // ================= FILA 1: cliente y salon =================
+
+        panel.Controls.Add(CrearEtiqueta("Buscar cliente (nombre o identificacion)", 14, 48));
 
         _txtBuscarCliente.Location = new Point(14, 66);
-        _txtBuscarCliente.Size = new Size(200, 26);
+        _txtBuscarCliente.Size = new Size(180, 26);
         _txtBuscarCliente.BorderStyle = BorderStyle.FixedSingle;
-        _txtBuscarCliente.PlaceholderText = "Filtrar cliente...";
+        _txtBuscarCliente.PlaceholderText = "Escriba para filtrar...";
         _txtBuscarCliente.TextChanged += (_, _) => FiltrarClientes();
         panel.Controls.Add(_txtBuscarCliente);
 
-        _cboCliente.Location = new Point(220, 66);
-        _cboCliente.Size = new Size(360, 26);
+        panel.Controls.Add(CrearEtiqueta("Cliente *", 200, 48));
+
+        _cboCliente.Location = new Point(200, 66);
+        _cboCliente.Size = new Size(330, 26);
         _cboCliente.DropDownStyle = ComboBoxStyle.DropDownList;
         _cboCliente.FlatStyle = FlatStyle.Flat;
         _cboCliente.DisplayMember = nameof(Cliente.Descripcion);
         _cboCliente.ValueMember = nameof(Cliente.IdCliente);
         panel.Controls.Add(_cboCliente);
 
-        // ---------- Salon ----------
-        panel.Controls.Add(CrearEtiqueta("Salon *", 600, 48));
+        // Aviso cuando el filtro no encuentra a nadie. Sin esto, la lista se
+        // quedaba vacia en silencio y el usuario no entendia por que el
+        // formulario decia "seleccione un cliente".
+        _lblAvisoCliente.Location = new Point(14, 94);
+        _lblAvisoCliente.Size = new Size(516, 18);
+        _lblAvisoCliente.Font = new Font("Segoe UI", 8F);
+        _lblAvisoCliente.ForeColor = AyudasUi.Paleta.Peligro;
+        panel.Controls.Add(_lblAvisoCliente);
 
-        _cboSalon.Location = new Point(600, 66);
-        _cboSalon.Size = new Size(300, 26);
+        panel.Controls.Add(CrearEtiqueta("Salon *", 545, 48));
+
+        _cboSalon.Location = new Point(545, 66);
+        _cboSalon.Size = new Size(280, 26);
         _cboSalon.DropDownStyle = ComboBoxStyle.DropDownList;
         _cboSalon.FlatStyle = FlatStyle.Flat;
         _cboSalon.DisplayMember = nameof(Salon.Descripcion);
@@ -228,48 +250,48 @@ internal sealed class FrmReservaEdicion : Form
         _cboSalon.SelectedIndexChanged += (_, _) => { ActualizarInfoSalon(); RecalcularTotales(); };
         panel.Controls.Add(_cboSalon);
 
-        _lblInfoSalon.Location = new Point(910, 68);
-        _lblInfoSalon.Size = new Size(280, 24);
+        _lblInfoSalon.Location = new Point(545, 94);
+        _lblInfoSalon.Size = new Size(300, 18);
         _lblInfoSalon.ForeColor = AyudasUi.Paleta.TextoSuave;
-        _lblInfoSalon.Font = new Font("Segoe UI", 8.5F);
+        _lblInfoSalon.Font = new Font("Segoe UI", 8F);
         panel.Controls.Add(_lblInfoSalon);
 
-        // ---------- Fecha y horario ----------
-        panel.Controls.Add(CrearEtiqueta("Fecha del evento *", 14, 104));
+        // ================= FILA 2: fecha, horario, invitados =================
 
-        _dtpFecha.Location = new Point(14, 122);
-        _dtpFecha.Size = new Size(200, 26);
-        _dtpFecha.Format = DateTimePickerFormat.Long;
+        panel.Controls.Add(CrearEtiqueta("Fecha del evento *", 14, 120));
+
+        _dtpFecha.Location = new Point(14, 138);
+        _dtpFecha.Size = new Size(180, 26);
+        _dtpFecha.Format = DateTimePickerFormat.Short;
         _dtpFecha.MinDate = DateTime.Today;
         _dtpFecha.Value = DateTime.Today.AddDays(7);
         panel.Controls.Add(_dtpFecha);
 
-        panel.Controls.Add(CrearEtiqueta("Hora inicio *", 224, 104));
+        panel.Controls.Add(CrearEtiqueta("Hora inicio *", 200, 120));
 
         ConfigurarHora(_dtpHoraInicio, new TimeSpan(9, 0, 0));
-        _dtpHoraInicio.Location = new Point(224, 122);
-        _dtpHoraInicio.Size = new Size(110, 26);
+        _dtpHoraInicio.Location = new Point(200, 138);
+        _dtpHoraInicio.Size = new Size(95, 26);
         _dtpHoraInicio.ValueChanged += (_, _) => ActualizarDuracion();
         panel.Controls.Add(_dtpHoraInicio);
 
-        panel.Controls.Add(CrearEtiqueta("Hora fin *", 344, 104));
+        panel.Controls.Add(CrearEtiqueta("Hora fin *", 301, 120));
 
         ConfigurarHora(_dtpHoraFin, new TimeSpan(13, 0, 0));
-        _dtpHoraFin.Location = new Point(344, 122);
-        _dtpHoraFin.Size = new Size(110, 26);
+        _dtpHoraFin.Location = new Point(301, 138);
+        _dtpHoraFin.Size = new Size(95, 26);
         _dtpHoraFin.ValueChanged += (_, _) => ActualizarDuracion();
         panel.Controls.Add(_dtpHoraFin);
 
-        _lblDuracion.Location = new Point(464, 126);
-        _lblDuracion.Size = new Size(230, 20);
+        _lblDuracion.Location = new Point(404, 142);
+        _lblDuracion.Size = new Size(240, 20);
         _lblDuracion.Font = new Font("Segoe UI", 8.5F);
         panel.Controls.Add(_lblDuracion);
 
-        // ---------- Invitados y descuento ----------
-        panel.Controls.Add(CrearEtiqueta("N.° de invitados *", 700, 104));
+        panel.Controls.Add(CrearEtiqueta("N.o de invitados *", 650, 120));
 
-        _numInvitados.Location = new Point(700, 122);
-        _numInvitados.Size = new Size(100, 26);
+        _numInvitados.Location = new Point(650, 138);
+        _numInvitados.Size = new Size(85, 26);
         _numInvitados.Minimum = 1;
         _numInvitados.Maximum = 100_000;
         _numInvitados.Value = 50;
@@ -278,10 +300,10 @@ internal sealed class FrmReservaEdicion : Form
         _numInvitados.ValueChanged += (_, _) => ActualizarInfoSalon();
         panel.Controls.Add(_numInvitados);
 
-        panel.Controls.Add(CrearEtiqueta("Descuento global (%)", 810, 104));
+        panel.Controls.Add(CrearEtiqueta("Descuento global %", 741, 120));
 
-        _numDescuentoGlobal.Location = new Point(810, 122);
-        _numDescuentoGlobal.Size = new Size(90, 26);
+        _numDescuentoGlobal.Location = new Point(741, 138);
+        _numDescuentoGlobal.Size = new Size(84, 26);
         _numDescuentoGlobal.Minimum = 0;
         _numDescuentoGlobal.Maximum = ReglasReserva.DescuentoMaximoPorcentaje;
         _numDescuentoGlobal.DecimalPlaces = 2;
@@ -290,21 +312,17 @@ internal sealed class FrmReservaEdicion : Form
         _numDescuentoGlobal.ValueChanged += (_, _) => { AvisarDescuentoAlto(); RecalcularTotales(); };
         panel.Controls.Add(_numDescuentoGlobal);
 
-        // ---------- Observacion ----------
-        panel.Controls.Add(CrearEtiqueta("Observacion", 14, 160));
+        // ================= FILA 3: observacion =================
 
-        _txtObservacion.Location = new Point(14, 178);
-        _txtObservacion.Size = new Size(886, 26);
+        panel.Controls.Add(CrearEtiqueta("Observacion", 14, 170));
+
+        _txtObservacion.Location = new Point(14, 188);
+        _txtObservacion.Size = new Size(811, 26);
         _txtObservacion.MaxLength = 500;
         _txtObservacion.BorderStyle = BorderStyle.FixedSingle;
+        // Crece con la ventana en lugar de quedarse corta o desbordarse.
+        _txtObservacion.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         panel.Controls.Add(_txtObservacion);
-
-        _btnVerificarDisponibilidad.Text = "Verificar disponibilidad";
-        _btnVerificarDisponibilidad.Location = new Point(910, 176);
-        _btnVerificarDisponibilidad.Size = new Size(190, 30);
-        _btnVerificarDisponibilidad.EstiloSecundario();
-        _btnVerificarDisponibilidad.Click += async (_, _) => await VerificarDisponibilidadAsync();
-        panel.Controls.Add(_btnVerificarDisponibilidad);
 
         return panel;
     }
@@ -569,9 +587,19 @@ internal sealed class FrmReservaEdicion : Form
         _btnCancelarReserva.Click += async (_, _) => await CancelarReservaAsync();
         panel.Controls.Add(_btnCancelarReserva);
 
-        _lblEstadoOperacion.Location = new Point(680, 22);
-        _lblEstadoOperacion.Size = new Size(480, 22);
+        // Se coloca aqui, y no en la cabecera, porque en la cabecera quedaba
+        // fuera del area visible cuando la ventana no era muy ancha.
+        _btnVerificarDisponibilidad.Text = "Verificar disponibilidad";
+        _btnVerificarDisponibilidad.Location = new Point(670, 12);
+        _btnVerificarDisponibilidad.Size = new Size(190, 38);
+        _btnVerificarDisponibilidad.EstiloSecundario();
+        _btnVerificarDisponibilidad.Click += async (_, _) => await VerificarDisponibilidadAsync();
+        panel.Controls.Add(_btnVerificarDisponibilidad);
+
+        _lblEstadoOperacion.Location = new Point(870, 22);
+        _lblEstadoOperacion.Size = new Size(420, 22);
         _lblEstadoOperacion.ForeColor = AyudasUi.Paleta.TextoSuave;
+        _lblEstadoOperacion.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         panel.Controls.Add(_lblEstadoOperacion);
 
         return panel;
@@ -1178,21 +1206,64 @@ internal sealed class FrmReservaEdicion : Form
         }
     }
 
+    /// <summary>
+    /// Filtra la lista de clientes por nombre o identificacion.
+    ///
+    /// AVISA CUANDO NO HAY COINCIDENCIAS. En la primera version, si el texto no
+    /// coincidia con nadie la lista se quedaba vacia en silencio y el usuario
+    /// no entendia por que al guardar salia "Seleccione un cliente". Ahora el
+    /// cuadro de busqueda se marca en rojo y aparece un aviso explicito.
+    ///
+    /// Ademas, si el filtro deja exactamente un cliente, se selecciona solo:
+    /// es el caso habitual cuando se escribe una identificacion completa.
+    /// </summary>
     private void FiltrarClientes()
     {
         var texto = _txtBuscarCliente.Text.Trim();
+        var hayFiltro = !string.IsNullOrWhiteSpace(texto);
 
-        var filtrados = string.IsNullOrWhiteSpace(texto)
-            ? _clientes
-            : _clientes.Where(c =>
+        var filtrados = hayFiltro
+            ? _clientes.Where(c =>
                     c.Nombres.Contains(texto, StringComparison.OrdinalIgnoreCase)
                     || c.Identificacion.Contains(texto, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+                .ToList()
+            : _clientes;
 
         var seleccionado = (_cboCliente.SelectedItem as Cliente)?.IdCliente;
 
         _cboCliente.DataSource = filtrados;
 
+        // ---------- Sin coincidencias: avisar en lugar de callar ----------
+        if (hayFiltro && filtrados.Count == 0)
+        {
+            _txtBuscarCliente.BackColor = Color.FromArgb(255, 235, 238);
+
+            _lblAvisoCliente.Text =
+                $"Ningun cliente coincide con \"{texto}\". Borre el filtro para ver los "
+                + $"{_clientes.Count} cliente(s) activo(s), o registrelo en Catalogos.";
+
+            _lblAvisoCliente.ForeColor = AyudasUi.Paleta.Peligro;
+            return;
+        }
+
+        _txtBuscarCliente.BackColor = SystemColors.Window;
+
+        // ---------- Una sola coincidencia: seleccionarla ----------
+        if (hayFiltro && filtrados.Count == 1)
+        {
+            _cboCliente.SelectedIndex = 0;
+            _lblAvisoCliente.Text = "Cliente encontrado y seleccionado.";
+            _lblAvisoCliente.ForeColor = AyudasUi.Paleta.Exito;
+            return;
+        }
+
+        _lblAvisoCliente.Text = hayFiltro
+            ? $"{filtrados.Count} cliente(s) coinciden. Elija uno en la lista."
+            : string.Empty;
+
+        _lblAvisoCliente.ForeColor = AyudasUi.Paleta.TextoSuave;
+
+        // Se conserva la seleccion previa si sigue estando en la lista filtrada.
         if (seleccionado.HasValue && filtrados.Exists(c => c.IdCliente == seleccionado.Value))
         {
             _cboCliente.SelectedValue = seleccionado.Value;

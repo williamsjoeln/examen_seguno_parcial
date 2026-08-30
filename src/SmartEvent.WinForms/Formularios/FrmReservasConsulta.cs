@@ -83,7 +83,7 @@ internal sealed class FrmReservasConsulta : Form
         WindowState = FormWindowState.Maximized;
         BackColor = AyudasUi.Paleta.Fondo;
         Font = new Font("Segoe UI", 9F);
-        MinimumSize = new Size(1120, 660);
+        MinimumSize = new Size(900, 600);
 
         var contenedor = new TableLayoutPanel
         {

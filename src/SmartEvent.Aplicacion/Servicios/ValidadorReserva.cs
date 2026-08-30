@@ -43,7 +43,9 @@ public static class ValidadorReserva
         // --- Cliente y salon ---
         if (solicitud.IdCliente <= 0)
         {
-            problemas.Add(new Problema(nameof(solicitud.IdCliente), "Seleccione un cliente."));
+            problemas.Add(new Problema(nameof(solicitud.IdCliente),
+                "Seleccione un cliente en la lista. Si escribio algo en el cuadro de busqueda "
+                + "y no aparece ninguno, borre el filtro."));
         }
 
         if (solicitud.IdSalon <= 0)
