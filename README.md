@@ -734,6 +734,8 @@ Debe terminar con **0 advertencias y 0 errores**.
 
 | Documento | Contenido |
 |---|---|
+| [`docs/DEFENSA_TECNICA.md`](docs/DEFENSA_TECNICA.md) | Preguntas probables del docente, con la respuesta y el porqué de cada decisión |
+| [`docs/AUDITORIA_FINAL.md`](docs/AUDITORIA_FINAL.md) | Cada requisito del examen: dónde está implementado y cómo se comprueba |
 | [`docs/USO_IA.md`](docs/USO_IA.md) | Uso de IA en el desarrollo: herramientas, prompts, errores detectados y decisiones propias |
 | [`docs/CHECKLIST_EXAMEN.md`](docs/CHECKLIST_EXAMEN.md) | Los 141 requisitos del examen, rastreados uno a uno |
 | [`docs/evidencias/`](docs/evidencias/) | Capturas numeradas y explicación de CA-01 a CA-10 |
