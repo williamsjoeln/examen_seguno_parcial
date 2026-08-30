@@ -711,13 +711,22 @@ La batería es **repetible**: limpia su propia franja de fechas antes de empezar
 
 | | |
 |---|---|
-| **Etiqueta** | `v1.0.0` |
-| **Hash corto del commit final** | `PENDIENTE` |
+| **Etiqueta de entrega** | `v1.0.0` |
+| **Hash corto del último commit de contenido** | **`42eac77`** |
+| **Commit etiquetado** | `git rev-list -n 1 --abbrev-commit v1.0.0` |
+
+> El commit etiquetado es el que registra este propio dato en el README, por lo que su hash no puede escribirse dentro de sí mismo. El comando de arriba lo devuelve en un segundo; el hash indicado corresponde al último commit que aporta contenido (`docs: auditoría final requisito por requisito`).
+
+Para verificar la entrega desde cero:
 
 ```bash
+git clone <URL-DEL-REPOSITORIO> smartevent
+cd smartevent
 git checkout v1.0.0
 dotnet build SmartEventAI.sln
 ```
+
+Debe terminar con **0 advertencias y 0 errores**.
 
 ---
 
