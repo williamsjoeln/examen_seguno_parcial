@@ -1,4 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
 using SmartEvent.Aplicacion.Contratos;
 using SmartEvent.Aplicacion.Servicios;
 using SmartEvent.Aplicacion.Sesion;
@@ -23,7 +22,7 @@ namespace SmartEvent.WinForms.Formularios;
 /// </summary>
 internal sealed class FrmPrincipal : Form
 {
-    private readonly IServiceProvider _servicios;
+    private readonly FabricaFormularios _formularios;
     private readonly SesionUsuario _sesion;
     private readonly ServicioAutenticacion _autenticacion;
     private readonly IRegistradorSeguro _registro;
@@ -39,12 +38,12 @@ internal sealed class FrmPrincipal : Form
     private bool _cerrandoSesion;
 
     public FrmPrincipal(
-        IServiceProvider servicios,
+        FabricaFormularios formularios,
         SesionUsuario sesion,
         ServicioAutenticacion autenticacion,
         IRegistradorSeguro registro)
     {
-        _servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+        _formularios = formularios ?? throw new ArgumentNullException(nameof(formularios));
         _sesion = sesion ?? throw new ArgumentNullException(nameof(sesion));
         _autenticacion = autenticacion ?? throw new ArgumentNullException(nameof(autenticacion));
         _registro = registro ?? throw new ArgumentNullException(nameof(registro));
@@ -245,7 +244,7 @@ internal sealed class FrmPrincipal : Form
             return existente;
         }
 
-        var formulario = _servicios.GetRequiredService<T>();
+        var formulario = _formularios.Crear<T>();
         formulario.MdiParent = this;
         formulario.Show();
         return formulario;
@@ -259,7 +258,7 @@ internal sealed class FrmPrincipal : Form
 
     private void AbrirNuevaReserva()
     {
-        var formulario = _servicios.GetRequiredService<FrmReservaEdicion>();
+        var formulario = _formularios.Crear<FrmReservaEdicion>();
         formulario.MdiParent = this;
         formulario.PrepararNueva();
         formulario.Show();
@@ -278,7 +277,7 @@ internal sealed class FrmPrincipal : Form
             return;
         }
 
-        var formulario = _servicios.GetRequiredService<FrmReservaEdicion>();
+        var formulario = _formularios.Crear<FrmReservaEdicion>();
         formulario.MdiParent = this;
         formulario.PrepararEdicion(idReserva);
         formulario.Show();
@@ -320,7 +319,7 @@ internal sealed class FrmPrincipal : Form
         }
 
         _temporizadorConectividad.Stop();
-        _cancelacion?.Cancel();
+        AyudasUi.CancelarSeguro(_cancelacion);
     }
 
     private void MostrarAcercaDe() =>
@@ -340,8 +339,7 @@ internal sealed class FrmPrincipal : Form
     {
         if (disposing)
         {
-            _cancelacion?.Cancel();
-            _cancelacion?.Dispose();
+            AyudasUi.Liberar(ref _cancelacion);
             _temporizadorConectividad.Dispose();
         }
 

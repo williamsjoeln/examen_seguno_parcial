@@ -137,6 +137,67 @@ internal static class AyudasUi
         }
     }
 
+    // ===================== LIBERACION DE RECURSOS =====================
+
+    /// <summary>
+    /// Cancela y libera un CancellationTokenSource dejando la referencia en
+    /// null, de modo que llamar dos veces sea inofensivo.
+    ///
+    /// POR QUE HACE FALTA: Dispose(bool) de un formulario puede ejecutarse mas
+    /// de una vez, y llamar a Cancel() sobre un origen ya liberado lanza
+    /// ObjectDisposedException. Ese fallo aparecio de verdad al cerrar sesion
+    /// con la ventana de auditoria abierta, y la traza quedo registrada en el
+    /// archivo de log. Concentrar aqui la liberacion evita repetir el mismo
+    /// error en cada formulario.
+    /// </summary>
+    public static void Liberar(ref CancellationTokenSource? origen)
+    {
+        var actual = origen;
+        origen = null;
+
+        if (actual is null)
+        {
+            return;
+        }
+
+        try
+        {
+            actual.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Ya estaba liberado: no hay nada que cancelar.
+        }
+        finally
+        {
+            actual.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Cancela un CancellationTokenSource sin lanzar si ya estaba liberado.
+    ///
+    /// Se usa en los eventos de cierre de formulario y en el boton de cancelar
+    /// analisis, donde el origen puede haberse liberado antes de que llegue el
+    /// evento. Cancel() sobre un origen liberado lanza ObjectDisposedException.
+    /// </summary>
+    public static void CancelarSeguro(CancellationTokenSource? origen)
+    {
+        if (origen is null)
+        {
+            return;
+        }
+
+        try
+        {
+            origen.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Ya estaba liberado: no queda nada por cancelar.
+        }
+    }
+
     // ===================== PRESENTACION DE ESTADOS =====================
 
     /// <summary>

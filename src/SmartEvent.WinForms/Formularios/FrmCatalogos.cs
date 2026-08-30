@@ -791,8 +791,7 @@ internal sealed class FrmCatalogos : Form
     {
         if (disposing)
         {
-            _cancelacion?.Cancel();
-            _cancelacion?.Dispose();
+            AyudasUi.Liberar(ref _cancelacion);
         }
 
         base.Dispose(disposing);

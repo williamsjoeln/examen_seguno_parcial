@@ -97,7 +97,7 @@ internal sealed class FrmAuditoriaIntegraciones : Form
             await CargarAnalisisAsync();
         };
 
-        FormClosing += (_, _) => _cancelacion?.Cancel();
+        FormClosing += (_, _) => AyudasUi.CancelarSeguro(_cancelacion);
     }
 
     // =====================================================================
@@ -661,8 +661,7 @@ internal sealed class FrmAuditoriaIntegraciones : Form
     {
         if (disposing)
         {
-            _cancelacion?.Cancel();
-            _cancelacion?.Dispose();
+            AyudasUi.Liberar(ref _cancelacion);
         }
 
         base.Dispose(disposing);

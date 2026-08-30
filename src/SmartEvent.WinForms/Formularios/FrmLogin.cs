@@ -169,7 +169,7 @@ internal sealed class FrmLogin : Form
             return;
         }
 
-        _cancelacion?.Dispose();
+        AyudasUi.Liberar(ref _cancelacion);
         _cancelacion = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
         HabilitarControles(false);
@@ -260,8 +260,7 @@ internal sealed class FrmLogin : Form
     {
         if (disposing)
         {
-            _cancelacion?.Cancel();
-            _cancelacion?.Dispose();
+            AyudasUi.Liberar(ref _cancelacion);
             _temporizadorBloqueo.Dispose();
         }
 

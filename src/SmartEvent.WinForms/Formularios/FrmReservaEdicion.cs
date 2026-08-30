@@ -54,6 +54,13 @@ internal sealed class FrmReservaEdicion : Form
     private CancellationTokenSource? _cancelacionIa;
     private bool _cargando;
 
+    /// <summary>
+    /// Impide que RecalcularTotales se vuelva a invocar mientras ya se esta
+    /// ejecutando. Es la red de seguridad frente a la reentrada que provoco el
+    /// fallo descrito en RecalcularTotales.
+    /// </summary>
+    private bool _recalculando;
+
     /// <summary>Identificador de la reserva abierta. Lo usa FrmPrincipal para no duplicar ventanas.</summary>
     public int IdReservaActual => _idReserva;
 
@@ -160,8 +167,8 @@ internal sealed class FrmReservaEdicion : Form
         Shown += FrmReservaEdicionShown;
         FormClosing += (_, _) =>
         {
-            _cancelacion?.Cancel();
-            _cancelacionIa?.Cancel();
+            AyudasUi.CancelarSeguro(_cancelacion);
+            AyudasUi.CancelarSeguro(_cancelacionIa);
         };
     }
 
@@ -544,7 +551,7 @@ internal sealed class FrmReservaEdicion : Form
         _btnCancelarIa.Size = new Size(150, 38);
         _btnCancelarIa.EstiloSecundario();
         _btnCancelarIa.Visible = false;
-        _btnCancelarIa.Click += (_, _) => _cancelacionIa?.Cancel();
+        _btnCancelarIa.Click += (_, _) => AyudasUi.CancelarSeguro(_cancelacionIa);
         panel.Controls.Add(_btnCancelarIa);
 
         _btnConfirmar.Text = "Confirmar reserva";
@@ -657,14 +664,19 @@ internal sealed class FrmReservaEdicion : Form
 
             foreach (var detalle in reserva.Detalles)
             {
-                _detalles.Add(new FilaDetalle
+                var fila = new FilaDetalle
                 {
                     IdRecurso = detalle.IdRecurso,
                     Cantidad = detalle.Cantidad,
                     PrecioUnitario = detalle.PrecioUnitario,
-                    PorcentajeDescuento = detalle.PorcentajeDescuento,
-                    SubtotalLinea = detalle.SubtotalLinea
-                });
+                    PorcentajeDescuento = detalle.PorcentajeDescuento
+                };
+
+                // La fila calcula su propio subtotal con la misma formula que
+                // SQL Server, de modo que coincide con el valor persistido.
+                fila.ActualizarSubtotal();
+
+                _detalles.Add(fila);
             }
         }
         finally
@@ -688,31 +700,49 @@ internal sealed class FrmReservaEdicion : Form
     // =====================================================================
 
     /// <summary>
-    /// Recalcula subtotales y totales con la misma aritmetica que
+    /// Recalcula los totales de la CABECERA con la misma aritmetica que
     /// evt.sp_Reserva_Guardar. Se invoca en cada cambio de la grilla, del salon
     /// o del descuento global.
+    ///
+    /// ESTE METODO ES DE SOLO LECTURA SOBRE LAS FILAS, Y ESO ES DELIBERADO.
+    ///
+    /// En la primera version recorria el detalle asignando el subtotal de cada
+    /// linea. Al ejecutar la aplicacion aparecio este fallo real:
+    ///
+    ///   AgregarLinea -> BindingList.ListChanged -> RecalcularTotales
+    ///     -> fila.SubtotalLinea = ... -> PropertyChanged -> ListChanged otra vez
+    ///     -> DataGridView.InvalidateCell(fila 0) cuando la grilla aun tiene 0 filas
+    ///     -> ArgumentOutOfRangeException: rowIndex ('0') must be less than '0'
+    ///
+    /// Es decir, se modificaban los elementos de la lista DESDE DENTRO del
+    /// evento que notifica que la lista cambio, y la grilla todavia no habia
+    /// terminado de procesar el cambio anterior. La solucion correcta no es
+    /// silenciar la excepcion, sino quitar la reentrada: cada FilaDetalle
+    /// calcula su propio subtotal cuando cambian su cantidad, su precio o su
+    /// descuento, y este metodo se limita a sumar y mostrar.
     /// </summary>
     private void RecalcularTotales()
     {
-        if (_cargando) { return; }
+        if (_cargando || _recalculando) { return; }
 
-        var salon = _cboSalon.SelectedItem as Salon;
-        var tarifaBase = salon?.TarifaBase ?? 0m;
+        _recalculando = true;
 
-        foreach (var fila in _detalles)
+        try
         {
-            fila.SubtotalLinea = CalculadoraTotales.CalcularSubtotalLinea(
-                fila.Cantidad, fila.PrecioUnitario, fila.PorcentajeDescuento);
+            var salon = _cboSalon.SelectedItem as Salon;
+            var tarifaBase = salon?.TarifaBase ?? 0m;
+
+            var lineas = _detalles.Select(f =>
+                new LineaCalculo(f.Cantidad, f.PrecioUnitario, f.PorcentajeDescuento));
+
+            var totales = CalculadoraTotales.Calcular(tarifaBase, lineas, _numDescuentoGlobal.Value);
+
+            MostrarTotales(totales.Subtotal, totales.Descuento, totales.Impuesto, totales.Total);
         }
-
-        var lineas = _detalles.Select(f =>
-            new LineaCalculo(f.Cantidad, f.PrecioUnitario, f.PorcentajeDescuento));
-
-        var totales = CalculadoraTotales.Calcular(tarifaBase, lineas, _numDescuentoGlobal.Value);
-
-        MostrarTotales(totales.Subtotal, totales.Descuento, totales.Impuesto, totales.Total);
-
-        _grilla.Refresh();
+        finally
+        {
+            _recalculando = false;
+        }
     }
 
     private void MostrarTotales(decimal subtotal, decimal descuento, decimal impuesto, decimal total)
@@ -801,13 +831,20 @@ internal sealed class FrmReservaEdicion : Form
             return;
         }
 
-        _detalles.Add(new FilaDetalle
+        var nueva = new FilaDetalle
         {
             IdRecurso = disponible.IdRecurso,
             Cantidad = 1,
             PrecioUnitario = disponible.PrecioUnitario,
             PorcentajeDescuento = 0m
-        });
+        };
+
+        // El subtotal se deja calculado ANTES de agregar la fila a la lista.
+        // Asi la grilla recibe un elemento ya completo y no hace falta
+        // modificarlo despues, que es lo que provocaba la reentrada.
+        nueva.ActualizarSubtotal();
+
+        _detalles.Add(nueva);
 
         RecalcularTotales();
     }
@@ -926,7 +963,7 @@ internal sealed class FrmReservaEdicion : Form
             return;
         }
 
-        _cancelacionIa?.Dispose();
+        AyudasUi.Liberar(ref _cancelacionIa);
         _cancelacionIa = new CancellationTokenSource();
 
         _btnAnalizarIa.Enabled = false;
@@ -1166,10 +1203,8 @@ internal sealed class FrmReservaEdicion : Form
     {
         if (disposing)
         {
-            _cancelacion?.Cancel();
-            _cancelacion?.Dispose();
-            _cancelacionIa?.Cancel();
-            _cancelacionIa?.Dispose();
+            AyudasUi.Liberar(ref _cancelacion);
+            AyudasUi.Liberar(ref _cancelacionIa);
         }
 
         base.Dispose(disposing);
@@ -1182,7 +1217,7 @@ internal sealed class FrmReservaEdicion : Form
     /// subtotal en cuanto cambian cantidad, precio o descuento: es lo que hace
     /// que el "calculo en tiempo real" se vea de verdad.
     /// </summary>
-    private sealed class FilaDetalle : System.ComponentModel.INotifyPropertyChanged
+    private sealed class FilaDetalle : INotifyPropertyChanged
     {
         private int _idRecurso;
         private int _cantidad = 1;
@@ -1190,7 +1225,7 @@ internal sealed class FrmReservaEdicion : Form
         private decimal _porcentajeDescuento;
         private decimal _subtotalLinea;
 
-        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
 
         public int IdRecurso
         {
@@ -1201,36 +1236,69 @@ internal sealed class FrmReservaEdicion : Form
         public int Cantidad
         {
             get => _cantidad;
-            set => Asignar(ref _cantidad, value, nameof(Cantidad));
+            set
+            {
+                if (Asignar(ref _cantidad, value, nameof(Cantidad)))
+                {
+                    ActualizarSubtotal();
+                }
+            }
         }
 
         public decimal PrecioUnitario
         {
             get => _precioUnitario;
-            set => Asignar(ref _precioUnitario, value, nameof(PrecioUnitario));
+            set
+            {
+                if (Asignar(ref _precioUnitario, value, nameof(PrecioUnitario)))
+                {
+                    ActualizarSubtotal();
+                }
+            }
         }
 
         public decimal PorcentajeDescuento
         {
             get => _porcentajeDescuento;
-            set => Asignar(ref _porcentajeDescuento, value, nameof(PorcentajeDescuento));
+            set
+            {
+                if (Asignar(ref _porcentajeDescuento, value, nameof(PorcentajeDescuento)))
+                {
+                    ActualizarSubtotal();
+                }
+            }
         }
 
+        /// <summary>
+        /// Subtotal de la linea. Es de solo lectura desde fuera: lo calcula la
+        /// propia fila. Nadie mas puede asignarlo, y por eso ya no puede
+        /// producirse la reentrada que rompia la grilla.
+        /// </summary>
         public decimal SubtotalLinea
         {
             get => _subtotalLinea;
-            set => Asignar(ref _subtotalLinea, value, nameof(SubtotalLinea));
+            private set => Asignar(ref _subtotalLinea, value, nameof(SubtotalLinea));
         }
 
-        private void Asignar<T>(ref T campo, T valor, string nombre)
+        /// <summary>
+        /// Recalcula el subtotal con la misma formula que el procedimiento
+        /// almacenado. Se invoca sola cuando cambia cantidad, precio o descuento.
+        /// </summary>
+        public void ActualizarSubtotal() =>
+            SubtotalLinea = CalculadoraTotales.CalcularSubtotalLinea(
+                _cantidad, _precioUnitario, _porcentajeDescuento);
+
+        /// <summary>Devuelve true si el valor cambio realmente.</summary>
+        private bool Asignar<T>(ref T campo, T valor, string nombre)
         {
             if (EqualityComparer<T>.Default.Equals(campo, valor))
             {
-                return;
+                return false;
             }
 
             campo = valor;
-            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nombre));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nombre));
+            return true;
         }
     }
 }

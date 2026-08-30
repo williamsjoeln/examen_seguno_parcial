@@ -63,8 +63,10 @@ internal static class Program
             return;
         }
 
+        var fabricaFormularios = _servicios.GetRequiredService<FabricaFormularios>();
+
         // --- Inicio de sesion ---
-        using (var login = _servicios.GetRequiredService<FrmLogin>())
+        using (var login = fabricaFormularios.Crear<FrmLogin>())
         {
             if (login.ShowDialog() != DialogResult.OK)
             {
@@ -74,7 +76,7 @@ internal static class Program
         }
 
         // --- Ventana principal ---
-        var principal = _servicios.GetRequiredService<FrmPrincipal>();
+        var principal = fabricaFormularios.Crear<FrmPrincipal>();
         Application.Run(principal);
 
         _registro.Informacion("=== Fin de la aplicacion SmartEvent AI ===");

@@ -103,12 +103,23 @@ internal static class ContenedorServicios
     }
 
     /// <summary>
-    /// Los formularios se registran como transitorios: cada vez que se abre uno
-    /// se crea una instancia nueva con sus dependencias ya resueltas. Asi
-    /// ningun formulario tiene que usar "new" sobre un servicio.
+    /// Registro de la fabrica de formularios y de los propios formularios.
+    ///
+    /// Los formularios se REGISTRAN pero NO se resuelven desde el contenedor.
+    /// El motivo esta explicado en detalle en FabricaFormularios: el contenedor
+    /// rastrea los servicios transitorios que implementan IDisposable, y un Form
+    /// lo implementa, de modo que se quedaba con una referencia a cada ventana
+    /// abierta y ademas la liberaba por segunda vez al cerrar la aplicacion.
+    /// Se mantiene el registro unicamente para que ValidateOnBuild compruebe al
+    /// arrancar que todas sus dependencias existen.
     /// </summary>
     private static void RegistrarFormularios(IServiceCollection servicios)
     {
+        servicios.AddSingleton<Comun.FabricaFormularios>();
+
+        // Se registran para que ValidateOnBuild compruebe sus dependencias al
+        // arrancar, pero NUNCA se resuelven desde el contenedor: se crean con
+        // FabricaFormularios para que su ciclo de vida lo controle Windows Forms.
         servicios.AddTransient<FrmLogin>();
         servicios.AddTransient<FrmPrincipal>();
         servicios.AddTransient<FrmCatalogos>();

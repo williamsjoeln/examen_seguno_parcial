@@ -105,7 +105,7 @@ internal sealed class FrmReservasConsulta : Form
         Controls.Add(contenedor);
 
         Shown += FrmReservasConsultaShown;
-        FormClosing += (_, _) => _cancelacion?.Cancel();
+        FormClosing += (_, _) => AyudasUi.CancelarSeguro(_cancelacion);
     }
 
     private Panel ConstruirPanelFiltros()
@@ -411,8 +411,7 @@ internal sealed class FrmReservasConsulta : Form
     private async Task BuscarAsync(bool reiniciar)
     {
         // Se cancela la busqueda anterior y se crea un token nuevo.
-        _cancelacion?.Cancel();
-        _cancelacion?.Dispose();
+        AyudasUi.Liberar(ref _cancelacion);
         _cancelacion = new CancellationTokenSource();
 
         if (reiniciar)
@@ -657,8 +656,7 @@ internal sealed class FrmReservasConsulta : Form
     {
         if (disposing)
         {
-            _cancelacion?.Cancel();
-            _cancelacion?.Dispose();
+            AyudasUi.Liberar(ref _cancelacion);
         }
 
         base.Dispose(disposing);
