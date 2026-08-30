@@ -36,30 +36,34 @@ Cada bloque imprime `OK` o `FALLO`.
 
 ## Índice de capturas
 
-**Guarde TODAS las capturas en esta misma carpeta** (`docs/evidencias/`) con exactamente estos nombres. El formato debe ser PNG.
+Todas las capturas estan en esta misma carpeta (`docs/evidencias/`), en formato PNG.
 
-| Nº | Archivo | Caso |
-|---|---|---|
-| 01 | `01-login.png` | Formularios |
-| 02 | `02-login-bloqueo.png` | Bloqueo temporal |
-| 03 | `03-principal-coordinador.png` | Menú por permisos |
-| 04 | `04-principal-admin.png` | Menú por permisos |
-| 05 | `05-catalogos.png` | Formularios |
-| 06 | `06-reserva-tres-detalles.png` | CA-01 |
-| 07 | `07-reserva-recuperada.png` | CA-01 |
-| 08 | `08-rollback.png` | CA-02 |
-| 09 | `09-cruce-horario.png` | CA-03 |
-| 10 | `10-editar-borrador.png` | CA-04 |
-| 11 | `11-capacidad-stock-sql.png` | CA-05 |
-| 12 | `12-confirmar.png` | CA-06 |
-| 13 | `13-correo-html.png` | CA-06 |
-| 14 | `14-auditoria-correo.png` | CA-06 |
-| 15 | `15-reenvio-ca07.png` | CA-07 |
-| 16 | `16-analisis-ia.png` | CA-08 |
-| 17 | `17-auditoria-ia-json.png` | CA-08 |
-| 18 | `18-ia-sin-clave.png` | CA-09 |
-| 19 | `19-consulta-reservas.png` | Formularios |
-| 20 | `20-clon-limpio.png` | CA-10 |
+Las marcadas como *pendiente* son complementarias: el caso correspondiente ya queda demostrado por la prueba automatizada y por las capturas presentes, pero anadirlas refuerza la evidencia visual.
+
+| Nº | Archivo | Caso | Estado |
+|---|---|---|:---:|
+| 01 | `01-login.png` | Formularios | ✅ |
+| 02 | `02-login-bloqueo.png` | Bloqueo temporal | ✅ |
+| 03 | `03-principal-coordinador.png` | Menú por permisos | ✅ |
+| 04 | `04-principal-admin.png` | Menú por permisos | ✅ |
+| 05 | `05-catalogos.png` | Formularios | ✅ |
+| 06 | `06-reserva-tres-detalles.png` | CA-01 | ✅ |
+| 07 | `07-reserva-recuperada.png` | CA-01 | pendiente |
+| 08 | `08-rollback.png` | CA-02 | ✅ |
+| 08b | `08b-resumen-pruebas-sql.png` | CA-01 a CA-05, resumen | ✅ |
+| 09 | `09-cruce-horario.png` | CA-03 | pendiente |
+| 10 | `10-editar-borrador.png` | CA-04 | pendiente |
+| 11 | `11-capacidad-stock-sql.png` | CA-05 | ✅ |
+| 12 | `12-confirmar.png` | CA-06 | ✅ |
+| 13 | `13-correo-html.png` | CA-06 | ✅ |
+| 13b | `13b-correo-html-segunda-reserva.png` | CA-06 | ✅ |
+| 14 | `14-bandeja-smtp4dev.png` | CA-06 | ✅ |
+| 15 | `15-reenvio-ca07.png` | CA-07 | pendiente |
+| 16 | `16-analisis-ia.png` | CA-08 | ✅ |
+| 17 | `17-auditoria-ia-json.png` | CA-08 | pendiente |
+| 18 | `18-ia-sin-clave.png` | CA-09 | pendiente |
+| 19 | `19-consulta-reservas.png` | Formularios | pendiente |
+| 20 | `20-clon-limpio.png` | CA-10 | ✅ |
 
 ---
 
